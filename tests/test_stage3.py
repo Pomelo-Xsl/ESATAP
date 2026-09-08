@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 from unittest.mock import patch
 
 from app.models.task import TestTask as TaskModel
@@ -14,6 +15,14 @@ def test_dashboard_renders(client):
 def test_dashboard_uses_single_line_english_product_title(client):
     response = client.get("/")
     assert '<h1 class="hero-title">Enterprise SSD Automated Testing and Analysis Platform</h1>' in response.text
+
+
+def test_device_ui_shows_eligibility_and_disables_unsafe_targets():
+    root = Path(__file__).resolve().parents[1]
+    device_script = (root / "app/static/js/devices.js").read_text(encoding="utf-8")
+    create_script = (root / "app/static/js/create.js").read_text(encoding="utf-8")
+    assert "test_eligible" in device_script and "ineligible_reasons" in device_script
+    assert "d.test_eligible?'':'disabled'" in create_script
 
 
 def test_all_user_operations_have_pages(client):

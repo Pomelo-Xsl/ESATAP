@@ -68,6 +68,31 @@ def test_mounted_write_rejected():
         SafetyService(FakeDevices(device(mounted=True))).validate(request("rand_write_4k", destructive_confirmed=True, confirmation_device="/dev/nvme2n1"))
 
 
+def test_mounted_read_test_is_also_rejected():
+    with pytest.raises(ValueError, match="已挂载"):
+        SafetyService(FakeDevices(device(mounted=True))).validate(request("rand_read_4k"))
+
+
+def test_non_nvme_device_is_rejected():
+    with pytest.raises(ValueError, match="NVMe Namespace"):
+        SafetyService(FakeDevices(device(is_nvme=False))).validate(request())
+
+
+def test_rotational_or_non_ssd_device_is_rejected():
+    with pytest.raises(ValueError, match="非旋转 NVMe SSD"):
+        SafetyService(FakeDevices(device(is_ssd=False))).validate(request())
+
+
+def test_partitioned_device_is_rejected_for_all_tests():
+    with pytest.raises(ValueError, match="分区或文件系统"):
+        SafetyService(FakeDevices(device(has_partitions=True))).validate(request("rand_read_4k"))
+
+
+def test_device_in_use_is_rejected():
+    with pytest.raises(ValueError, match="系统占用"):
+        SafetyService(FakeDevices(device(in_use=True))).validate(request())
+
+
 def test_destructive_confirmation_required():
     with pytest.raises(ValueError, match="手工输入"):
         SafetyService(FakeDevices(device())).validate(request("seq_write_128k"))

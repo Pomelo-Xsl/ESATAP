@@ -15,7 +15,7 @@ class DeviceService:
         return subprocess.run(args, capture_output=True, text=True, timeout=10, check=False)
 
     def scan(self) -> list[dict[str, Any]]:
-        proc = self._run(["lsblk", "-J", "-b", "-o", "NAME,PATH,TYPE,SIZE,MODEL,SERIAL,FSTYPE,MOUNTPOINTS,PKNAME"])
+        proc = self._run(["lsblk", "-J", "-b", "-o", "NAME,PATH,TYPE,SIZE,MODEL,SERIAL,FSTYPE,MOUNTPOINTS,PKNAME,TRAN,ROTA,RO"])
         if proc.returncode:
             return []
         devices: list[dict[str, Any]] = []
@@ -30,7 +30,19 @@ class DeviceService:
             for child in children:
                 mounts.extend(m for m in (child.get("mountpoints") or []) if m)
             ctrl_name = Path(controller).name
-            devices.append({
+            has_partitions = bool(children)
+            has_filesystem = bool(item.get("fstype") or any(c.get("fstype") for c in children))
+            is_system_disk = self._is_system_disk(path) or any(m in {"/", "/boot", "/boot/efi"} for m in mounts)
+            has_holders = self._has_holders(name)
+            transport = (item.get("tran") or "").lower()
+            controller_exists = (Path("/sys/class/nvme") / ctrl_name).exists()
+            is_nvme = bool(NAMESPACE_RE.fullmatch(path)) and (transport == "nvme" or controller_exists)
+            rotational = item.get("rota")
+            if rotational is None:
+                rotational = self._read(Path("/sys/block") / name / "queue" / "rotational", "unknown")
+            is_ssd = rotational in (False, 0, "0")
+            read_only = item.get("ro") in (True, 1, "1")
+            device_info = {
                 "name": path, "namespace": path, "controller": controller,
                 "model": (item.get("model") or "").strip(), "serial": (item.get("serial") or "").strip(),
                 "firmware": self._read(Path("/sys/class/nvme") / ctrl_name / "firmware_rev"),
@@ -38,10 +50,31 @@ class DeviceService:
                 "pcie_address": self._read(Path("/sys/class/nvme") / ctrl_name / "address"),
                 "numa_node": self._read_numa_node(name, ctrl_name),
                 "mounted": bool(mounts), "mountpoints": mounts,
-                "has_partitions": bool(children),
-                "has_filesystem": bool(item.get("fstype") or any(c.get("fstype") for c in children)),
-                "in_use": bool(mounts), "is_system_disk": self._is_system_disk(path),
-            })
+                "has_partitions": has_partitions, "has_filesystem": has_filesystem,
+                "in_use": bool(mounts) or has_holders, "is_system_disk": is_system_disk,
+                "transport": transport or "unknown", "is_nvme": is_nvme, "is_ssd": is_ssd,
+                "read_only": read_only,
+            }
+            reasons = []
+            if not is_nvme:
+                reasons.append("不是 NVMe 设备")
+            if not is_ssd:
+                reasons.append("不是非旋转 SSD")
+            if is_system_disk:
+                reasons.append("系统盘或启动盘")
+            if mounts:
+                reasons.append("设备或分区已挂载")
+            if has_partitions:
+                reasons.append("包含分区")
+            if has_filesystem:
+                reasons.append("包含文件系统")
+            if has_holders:
+                reasons.append("设备正被内核存储栈占用")
+            if read_only:
+                reasons.append("设备处于只读状态")
+            device_info["test_eligible"] = not reasons
+            device_info["ineligible_reasons"] = reasons
+            devices.append(device_info)
         return devices
 
     @staticmethod
@@ -73,6 +106,13 @@ class DeviceService:
         proc = self._run(["findmnt", "-n", "-o", "SOURCE", "/"])
         source = proc.stdout.strip()
         return bool(source and (source == device or source.startswith(device + "p")))
+
+    @staticmethod
+    def _has_holders(namespace: str) -> bool:
+        try:
+            return any((Path("/sys/block") / namespace / "holders").iterdir())
+        except OSError:
+            return False
 
     def get(self, device: str) -> dict[str, Any] | None:
         return next((d for d in self.scan() if d["name"] == device), None)
