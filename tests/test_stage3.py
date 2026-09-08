@@ -126,6 +126,10 @@ def test_all_advanced_checkbox_groups_have_aligned_field_labels(client):
     assert 'class="toggle-grid span-' not in page
     assert page.count('class="toggle-field') == 7
     assert page.count('<span class="check-field-label">开关选项</span>') == 7
+    root = Path(__file__).resolve().parents[1]
+    styles = (root / "app/static/css/queue.css").read_text(encoding="utf-8")
+    toggle_field = styles.rsplit(".parameter-grid .toggle-field {", 1)[1].split("}", 1)[0]
+    assert "grid-column: 1 / -1;" in toggle_field
 
 
 def test_warmup_time_is_visible_in_core_parameters(client):

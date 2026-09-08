@@ -280,7 +280,6 @@
 .command-value { color: #d9e9e7; }
 .command-continuation { margin-left: auto; padding-left: 20px; color: var(--green); }
 .command-indent { color: transparent; user-select: none; }
-}
 
 .command-placeholder {
   padding: 24px;
@@ -320,4 +319,9 @@
   .command-group { grid-template-columns: 1fr; }
   .command-group-label { padding-bottom: 4px; border-right: 0; }
   .command-group-lines { padding-top: 2px; }
+}
+
+/* Advanced switch groups always start on a dedicated full-width row. */
+.parameter-grid .toggle-field {
+  grid-column: 1 / -1;
 }
