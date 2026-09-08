@@ -100,6 +100,16 @@
   align-items: center;
 }
 
+.check-field .check {
+  width: 100%;
+  min-height: 38px;
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #08141d;
+}
+
 .parameter-group {
   border-bottom: 1px solid var(--line);
 }
@@ -129,9 +139,11 @@
 
 .toggle-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 8px;
   align-self: stretch;
+  min-width: 0;
+  width: 100%;
 }
 
 .option-check {
@@ -145,6 +157,16 @@
   border-radius: 7px;
   background: #08141d;
   font: .72rem monospace;
+  width: 100%;
+}
+
+.option-check input[type="checkbox"],
+.check-field input[type="checkbox"] {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--green);
 }
 
 .form-submit {

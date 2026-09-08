@@ -111,6 +111,26 @@ def test_create_page_shows_live_full_command_preview(client):
     assert "command-group-label" in create_script
 
 
+def test_advanced_checkbox_layout_fills_available_grid_width():
+    root = Path(__file__).resolve().parents[1]
+    styles = (root / "app/static/css/queue.css").read_text(encoding="utf-8")
+    assert "repeat(auto-fit, minmax(180px, 1fr))" in styles
+    assert '.option-check input[type="checkbox"]' in styles
+    assert ".check-field .check" in styles
+    assert "width: 100%;" in styles
+
+
+def test_warmup_time_is_visible_in_core_parameters(client):
+    response = client.get("/tests/new")
+    page = response.text
+    core_start = page.index("核心 I/O 参数")
+    advanced_start = page.index("fio 高级参数")
+    ramp_time = page.index('name="ramp_time_seconds"')
+    assert core_start < ramp_time < advanced_start
+    assert page.count('name="ramp_time_seconds"') == 1
+    assert "预热阶段不计入正式性能统计" in page
+
+
 def test_normal_task_api_hides_legacy_queue_depth_scan_values(client):
     from app.core.database import SessionLocal
     with SessionLocal() as db:
