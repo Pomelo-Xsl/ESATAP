@@ -28,7 +28,9 @@ TERMINAL = {TaskStatus.completed.value, TaskStatus.failed.value, TaskStatus.stop
 
 class TaskManager:
     def __init__(self):
-        self.pool = ThreadPoolExecutor(max_workers=4, thread_name_prefix="ssd-test")
+        # fio tests are intentionally serialized across every device so one test
+        # cannot consume CPU, memory or PCIe bandwidth needed by another test.
+        self.pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="ssd-test")
         self.processes: dict[str, subprocess.Popen[str]] = {}
         self.stop_events: dict[str, threading.Event] = {}
         self.lock = threading.RLock()
@@ -49,7 +51,6 @@ class TaskManager:
                                     confirmation_device=confirmation.confirmation_device)
             self.safety.validate(validation)
             occupied = db.scalar(select(TestTask).where(
-                TestTask.device == task.device,
                 TestTask.status.in_([TaskStatus.running.value, TaskStatus.queued.value]),
             ))
             if occupied:
@@ -57,7 +58,7 @@ class TaskManager:
                 task.progress = 0
                 task.error_message = None
                 db.commit()
-                self._dispatch_next(task.device)
+                self._dispatch_next()
             else:
                 self._activate_locked(db, task)
             db.refresh(task)
@@ -78,17 +79,15 @@ class TaskManager:
         self.stop_events[task.id] = event
         self.pool.submit(self._execute, task.id, event)
 
-    def _dispatch_next(self, device: str) -> None:
+    def _dispatch_next(self) -> None:
         with self.lock, SessionLocal() as db:
             active = db.scalar(select(TestTask).where(
-                TestTask.device == device,
                 TestTask.status == TaskStatus.running.value,
             ))
             if active:
                 return
             while True:
                 task = db.scalar(select(TestTask).where(
-                    TestTask.device == device,
                     TestTask.status == TaskStatus.queued.value,
                     TestTask.deleted == 0,
                 ).order_by(TestTask.created_at.asc(), TestTask.id.asc()))
@@ -204,7 +203,7 @@ class TaskManager:
                 with self.lock:
                     self.processes.pop(test_id, None)
                     self.stop_events.pop(test_id, None)
-                self._dispatch_next(task.device)
+                self._dispatch_next()
 
     @staticmethod
     def _collect_logs(result_dir: Path) -> dict[str, list[dict[str, float]]]:
@@ -240,12 +239,11 @@ class TaskManager:
         with self.lock, SessionLocal() as db:
             task = db.get(TestTask, test_id)
             if task and task.status == TaskStatus.queued.value:
-                device = task.device
                 task.status = TaskStatus.stopped.value
                 task.error_message = "排队任务已由用户取消"
                 task.ended_at = datetime.now(timezone.utc)
                 db.commit()
-                self._dispatch_next(device)
+                self._dispatch_next()
                 return TaskStatus.stopped.value
             proc = self.processes.get(test_id)
             event = self.stop_events.get(test_id)
@@ -256,13 +254,7 @@ class TaskManager:
             return "stopping"
 
     def resume_queued(self) -> None:
-        with SessionLocal() as db:
-            devices = list(db.scalars(select(TestTask.device).where(
-                TestTask.status == TaskStatus.queued.value,
-                TestTask.deleted == 0,
-            ).distinct()))
-        for device in devices:
-            self._dispatch_next(device)
+        self._dispatch_next()
 
     def running_processes(self) -> list[dict[str, Any]]:
         with self.lock:

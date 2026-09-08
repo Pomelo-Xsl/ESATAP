@@ -81,7 +81,6 @@ def get_test(test_id: str, db: Session = Depends(get_db)):
     result["queue_position"] = None
     if task.status == "queued":
         queued_ids = list(db.scalars(select(TestTask.id).where(
-            TestTask.device == task.device,
             TestTask.status == "queued",
             TestTask.deleted == 0,
         ).order_by(TestTask.created_at.asc(), TestTask.id.asc())))

@@ -45,12 +45,12 @@ def test_task_status_values():
     assert {s.value for s in TaskStatus} == {"pending", "queued", "running", "completed", "failed", "stopped"}
 
 
-def test_start_queues_when_same_device_is_running():
+def test_start_queues_when_another_device_is_running():
     manager = TaskManager()
     manager.pool = Mock()
     now = datetime.now(timezone.utc)
     with SessionLocal() as db:
-        running = TaskModel(name="running", device="/dev/nvme2n1", test_type="rand_read_4k",
+        running = TaskModel(name="running", device="/dev/nvme1n1", test_type="rand_read_4k",
                            parameters_json="{}", status="running", started_at=now)
         waiting = TaskModel(name="waiting", device="/dev/nvme2n1", test_type="rand_read_4k",
                            parameters_json="{}")
@@ -63,20 +63,20 @@ def test_start_queues_when_same_device_is_running():
     manager.pool.submit.assert_not_called()
 
 
-def test_dispatch_starts_oldest_queued_task(tmp_path):
+def test_dispatch_starts_oldest_queued_task_globally(tmp_path):
     manager = TaskManager()
     manager.pool = Mock()
     now = datetime.now(timezone.utc)
     with SessionLocal() as db:
         first = TaskModel(name="first", device="/dev/nvme2n1", test_type="rand_read_4k",
                          parameters_json="{}", status="queued", created_at=now)
-        second = TaskModel(name="second", device="/dev/nvme2n1", test_type="rand_read_4k",
+        second = TaskModel(name="second", device="/dev/nvme3n1", test_type="rand_read_4k",
                           parameters_json="{}", status="queued", created_at=now + timedelta(seconds=1))
         db.add_all([first, second]); db.commit(); first_id, second_id = first.id, second.id
 
     with patch("app.services.task_manager.settings", SimpleNamespace(results_dir=tmp_path)), \
          patch.object(manager.safety, "validate", return_value={}):
-        manager._dispatch_next("/dev/nvme2n1")
+        manager._dispatch_next()
 
     with SessionLocal() as db:
         assert db.get(TaskModel, first_id).status == "running"
@@ -91,13 +91,13 @@ def test_dispatch_skips_queue_item_that_fails_fresh_safety_check(tmp_path):
     with SessionLocal() as db:
         unsafe = TaskModel(name="unsafe", device="/dev/nvme2n1", test_type="rand_read_4k",
                            parameters_json="{}", status="queued", created_at=now)
-        safe = TaskModel(name="safe", device="/dev/nvme2n1", test_type="rand_read_4k",
+        safe = TaskModel(name="safe", device="/dev/nvme3n1", test_type="rand_read_4k",
                          parameters_json="{}", status="queued", created_at=now + timedelta(seconds=1))
         db.add_all([unsafe, safe]); db.commit(); unsafe_id, safe_id = unsafe.id, safe.id
 
     with patch("app.services.task_manager.settings", SimpleNamespace(results_dir=tmp_path)), \
          patch.object(manager.safety, "validate", side_effect=[ValueError("设备已挂载"), {}]):
-        manager._dispatch_next("/dev/nvme2n1")
+        manager._dispatch_next()
 
     with SessionLocal() as db:
         rejected = db.get(TaskModel, unsafe_id)
@@ -128,13 +128,18 @@ def test_queued_task_api_reports_fifo_position(client):
     with SessionLocal() as db:
         first = TaskModel(name="first", device="/dev/nvme2n1", test_type="rand_read_4k",
                          parameters_json="{}", status="queued", created_at=now)
-        second = TaskModel(name="second", device="/dev/nvme2n1", test_type="rand_read_4k",
+        second = TaskModel(name="second", device="/dev/nvme3n1", test_type="rand_read_4k",
                           parameters_json="{}", status="queued", created_at=now + timedelta(seconds=1))
         db.add_all([first, second]); db.commit(); second_id = second.id
 
     payload = client.get(f"/api/tests/{second_id}").json()
     assert payload["status"] == "queued"
     assert payload["queue_position"] == 2
+
+
+def test_task_manager_uses_single_global_worker():
+    manager = TaskManager()
+    assert manager.pool._max_workers == 1
 
 
 def test_stop_only_registered_process():
