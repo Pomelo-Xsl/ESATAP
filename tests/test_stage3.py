@@ -59,4 +59,13 @@ def test_frontend_report_route(client):
     with patch("app.api.pages.environment_info", return_value={"fio":"x","nvme_cli":"x","operating_system":"x","python":"x"}):
         response = client.get(f"/tasks/{test_id}/report")
     assert response.status_code == 200
-    assert "测试报告 V1.0" in response.text
+    assert "测试报告" in response.text
+    assert "V1.0" not in response.text
+
+
+def test_navigation_is_vertical_sidebar(client):
+    response = client.get("/devices")
+    assert response.status_code == 200
+    assert 'class="sidebar"' in response.text
+    assert 'class="sidebar-nav"' in response.text
+    assert "V1.0" not in response.text

@@ -7,10 +7,19 @@
   <link href="/static/css/app.css" rel="stylesheet">
 </head>
 <body>
-<nav class="navbar navbar-expand-lg navbar-dark"><div class="container-fluid px-4">
-  <a class="navbar-brand" href="/"><span class="brand-mark">E</span> SSD TestLab <small>V1.0</small></a>
-  <div class="navbar-nav ms-auto flex-row gap-3"><a class="nav-link" href="/">总览</a><a class="nav-link" href="/devices">设备</a><a class="nav-link" href="/tests/new">创建测试</a><a class="nav-link" href="/tasks">任务记录</a><a class="nav-link" href="/processes">运行监控</a></div>
-</div></nav>
-<main class="container-fluid px-4 py-4">{% block content %}{% endblock %}</main>
+<div class="app-shell">
+  <aside class="sidebar">
+    <a class="sidebar-brand" href="/" aria-label="SSD TestLab 首页"><span class="brand-mark">E</span><span class="brand-copy">SSD TestLab</span></a>
+    <nav class="sidebar-nav" aria-label="主导航">
+      <a class="sidebar-link {{ 'active' if request.url.path == '/' else '' }}" href="/"><span class="nav-mark">总</span><span>总览</span></a>
+      <a class="sidebar-link {{ 'active' if request.url.path.startswith('/devices') else '' }}" href="/devices"><span class="nav-mark">盘</span><span>设备</span></a>
+      <a class="sidebar-link {{ 'active' if request.url.path.startswith('/tests/new') else '' }}" href="/tests/new"><span class="nav-mark">测</span><span>创建测试</span></a>
+      <a class="sidebar-link {{ 'active' if request.url.path.startswith('/tasks') else '' }}" href="/tasks"><span class="nav-mark">任</span><span>任务记录</span></a>
+      <a class="sidebar-link {{ 'active' if request.url.path.startswith('/processes') else '' }}" href="/processes"><span class="nav-mark">监</span><span>运行监控</span></a>
+    </nav>
+    <div class="sidebar-foot"><span class="system-light"></span><span>系统在线</span></div>
+  </aside>
+  <main class="app-main"><div class="content-wrap">{% block content %}{% endblock %}</div></main>
+</div>
 <script src="/static/js/app.js"></script>{% block scripts %}{% endblock %}
 </body></html>

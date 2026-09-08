@@ -1,4 +1,4 @@
-# 企业级 SSD 自动化测试与分析平台 V1.0
+# 企业级 SSD 自动化测试与分析平台
 
 Enterprise SSD Automated Testing and Analysis Platform。面向 Ubuntu Server 的单机 Web 平台，以 FastAPI、SQLite、fio、nvme-cli、Jinja2 和 ECharts 实现 NVMe SSD 发现、测试编排、后台执行、实时状态、SMART 前后对比、结果分析与 HTML 报告。
 
@@ -77,6 +77,6 @@ bash scripts/run.sh
 
 页面使用 Bootstrap/ECharts CDN；离线环境可将对应静态文件下载到 `app/static/vendor/` 后替换模板链接。
 
-## V1.0 边界
+## 当前版本边界
 
-V1.0 不包含用户权限、多节点调度、消息队列、容器编排、PDF 原生生成、邮件通知和 TRIM/格式化。HTML 报告可由浏览器打印为 PDF。服务重启时不会重新接管既有 fio 进程，因此生产运维应在无运行任务时升级或重启服务。
+当前版本不包含用户权限、多节点调度、消息队列、容器编排、PDF 原生生成、邮件通知和 TRIM/格式化。HTML 报告可由浏览器打印为 PDF。服务重启时不会重新接管既有 fio 进程，因此生产运维应在无运行任务时升级或重启服务。
