@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_serializer, field_validator, model_validator
 
 from app.core.config import settings
 
@@ -79,3 +79,11 @@ class TestRead(BaseModel):
     duration_seconds: Optional[float]
     error_message: Optional[str]
     result_dir: Optional[str]
+
+    @field_serializer("created_at", "started_at", "ended_at", when_used="json")
+    def serialize_utc_datetime(self, value: Optional[datetime]):
+        if value is None:
+            return None
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=timezone.utc)
+        return value.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")

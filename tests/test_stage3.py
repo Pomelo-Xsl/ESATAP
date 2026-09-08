@@ -1,4 +1,5 @@
 import json
+from datetime import datetime
 from pathlib import Path
 from unittest.mock import patch
 
@@ -86,3 +87,21 @@ def test_navigation_is_vertical_sidebar(client):
     assert 'class="sidebar"' in response.text
     assert 'class="sidebar-nav"' in response.text
     assert "V1.0" not in response.text
+
+
+def test_api_serializes_naive_sqlite_timestamps_as_utc(client):
+    from app.core.database import SessionLocal
+    with SessionLocal() as db:
+        task = TaskModel(name="timezone", device="/dev/nvme2n1", test_type="rand_read_4k",
+                         parameters_json="{}", status="running",
+                         started_at=datetime(2026, 9, 8, 1, 2, 3))
+        db.add(task); db.commit(); test_id = task.id
+    payload = client.get(f"/api/tests/{test_id}").json()
+    assert payload["started_at"] == "2026-09-08T01:02:03Z"
+
+
+def test_live_page_formats_elapsed_time_as_clock():
+    root = Path(__file__).resolve().parents[1]
+    live_script = (root / "app/static/js/live.js").read_text(encoding="utf-8")
+    assert "function formatElapsed" in live_script
+    assert "Date.parse(task.started_at)" in live_script
