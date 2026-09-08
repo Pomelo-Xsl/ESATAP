@@ -22,6 +22,9 @@ def test_device_ui_shows_eligibility_and_disables_unsafe_targets():
     device_script = (root / "app/static/js/devices.js").read_text(encoding="utf-8")
     create_script = (root / "app/static/js/create.js").read_text(encoding="utf-8")
     assert "test_eligible" in device_script and "ineligible_reasons" in device_script
+    assert 'class="eligibility-row"' in device_script
+    assert "device-card-actions" in device_script
+    assert "device-block-reason" not in device_script
     assert "d.test_eligible?'':'disabled'" in create_script
 
 
