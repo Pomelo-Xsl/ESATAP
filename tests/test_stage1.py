@@ -51,11 +51,29 @@ def test_fio_command_includes_validated_advanced_parameters(tmp_path):
     assert "--end_fsync=1" in args
 
 
+def test_fio_command_can_be_wrapped_with_numactl(tmp_path):
+    params = FioParameters(numactl_cpu_nodes="0", numactl_mem_nodes="0-1")
+    args = FioCommandBuilder().build(
+        "/dev/nvme2n1", "rand_read_4k", params,
+        str(tmp_path / "fio.json"), str(tmp_path / "run"),
+    )
+    assert args[:4] == ["numactl", "--cpunodebind=0", "--membind=0-1", "fio"]
+    assert "--filename=/dev/nvme2n1" in args
+
+
+def test_numactl_node_binding_rejects_shell_or_option_injection():
+    with pytest.raises(ValueError, match="numactl 节点格式无效"):
+        FioParameters(numactl_cpu_nodes="0;touch")
+    with pytest.raises(ValueError, match="numactl 节点格式无效"):
+        FioParameters(numactl_mem_nodes="--all")
+
+
 def test_every_validated_fio_parameter_is_mapped_to_command_generation():
     core_or_internal = {
         "block_size", "block_size_range", "block_size_split", "queue_depth", "queue_depths",
         "num_jobs", "runtime_seconds", "size", "precondition", "io_engine", "rw", "direct",
         "time_based", "group_reporting", "log_avg_msec", "latency_percentiles", "percentile_list",
+        "numactl_cpu_nodes", "numactl_mem_nodes",
     }
     assert set(FioParameters.model_fields) == set(OPTION_MAP) | core_or_internal
 
@@ -210,6 +228,23 @@ def test_command_preview_uses_real_builder_and_includes_managed_paths(client):
     assert [group["label"] for group in payload["commands"][0]["groups"]] == [
         "任务与目标", "I/O 模式", "队列与并发", "运行控制", "负载与速率", "统计与输出",
     ]
+
+
+def test_command_preview_shows_numactl_wrapper_before_fio(client):
+    response = client.post("/api/tests/preview-command", json={
+        "name": "numa preview", "device": "/dev/nvme2n1", "test_type": "rand_read_4k",
+        "parameters": {"numactl_cpu_nodes": "0", "numactl_mem_nodes": "0"},
+    })
+    assert response.status_code == 200
+    command = response.json()["commands"][0]
+    assert command["argv"][:4] == ["numactl", "--cpunodebind=0", "--membind=0", "fio"]
+    assert command["command"].splitlines()[:4] == [
+        "numactl \\", "  --cpunodebind=0 \\", "  --membind=0 \\", "  fio \\",
+    ]
+    assert command["groups"][0] == {
+        "label": "NUMA 进程绑定",
+        "arguments": ["--cpunodebind=0", "--membind=0", "fio"],
+    }
 
 
 def test_qd_command_preview_lists_each_selected_depth(client):

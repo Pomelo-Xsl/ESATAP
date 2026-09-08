@@ -147,7 +147,17 @@ def parameters_for_phase(parameters: FioParameters, phase: str) -> FioParameters
 def format_command_preview(argv: list[str]) -> dict[str, object]:
     buckets = {label: [] for label, _ in COMMAND_GROUPS}
     other: list[str] = []
-    for argument in argv[1:]:
+    executable = argv[0]
+    arguments = argv[1:]
+    prefix_group: dict[str, object] | None = None
+    fio_index = next((index for index, argument in enumerate(arguments) if not argument.startswith("--")), None)
+    if executable == "numactl" and fio_index is not None:
+        prefix_group = {
+            "label": "NUMA 进程绑定",
+            "arguments": [shlex.join([argument]) for argument in arguments[:fio_index + 1]],
+        }
+        arguments = arguments[fio_index + 1:]
+    for argument in arguments:
         option = argument[2:].split("=", 1)[0] if argument.startswith("--") else ""
         matched = False
         for label, option_names in COMMAND_GROUPS:
@@ -158,10 +168,12 @@ def format_command_preview(argv: list[str]) -> dict[str, object]:
         if not matched:
             other.append(shlex.join([argument]))
     groups = [{"label": label, "arguments": buckets[label]} for label, _ in COMMAND_GROUPS if buckets[label]]
+    if prefix_group:
+        groups.insert(0, prefix_group)
     if other:
         groups.append({"label": "其他参数", "arguments": other})
     ordered_arguments = [argument for group in groups for argument in group["arguments"]]
-    lines = [shlex.join([argv[0]])] + ordered_arguments
+    lines = [shlex.join([executable])] + ordered_arguments
     multiline = " \\\n  ".join(lines)
     return {"groups": groups, "multiline_command": multiline}
 
@@ -198,4 +210,11 @@ class FioCommandBuilder:
             value = getattr(params, attribute)
             if value is not None:
                 args.append(f"--{option}={int(value) if isinstance(value, bool) else value}")
+        if params.numactl_cpu_nodes is not None or params.numactl_mem_nodes is not None:
+            prefix = ["numactl"]
+            if params.numactl_cpu_nodes is not None:
+                prefix.append(f"--cpunodebind={params.numactl_cpu_nodes}")
+            if params.numactl_mem_nodes is not None:
+                prefix.append(f"--membind={params.numactl_mem_nodes}")
+            args = prefix + args
         return args

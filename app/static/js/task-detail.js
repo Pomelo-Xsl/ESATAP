@@ -13,7 +13,8 @@ const parameterLabels = {
   thinktime_spin_us: '忙等待时间', thinktime_blocks: '思考间隔块数', latency_target_us: '目标时延',
   latency_window_us: '时延窗口', latency_percentile: '目标百分位', verify: '校验算法',
   verify_pattern: '校验模式', verify_interval: '校验间隔', cpus_allowed: '允许 CPU',
-  cpus_allowed_policy: 'CPU 分配策略', numa_cpu_nodes: 'NUMA CPU 节点', numa_mem_policy: 'NUMA 内存策略',
+  cpus_allowed_policy: 'CPU 分配策略', numactl_cpu_nodes: 'numactl CPU 节点绑定',
+  numactl_mem_nodes: 'numactl 内存节点绑定', numa_cpu_nodes: 'NUMA CPU 节点', numa_mem_policy: 'NUMA 内存策略',
   log_avg_msec: '日志平均窗口', log_hist_msec: '直方图周期', percentile_list: '时延百分位列表',
   latency_percentiles: '时延百分位', group_reporting: '分组报告', unified_rw_reporting: '统一读写报告',
 };

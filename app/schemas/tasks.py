@@ -91,6 +91,8 @@ class FioParameters(BaseModel):
     trim_backlog_batch: Optional[int] = Field(default=None, ge=0)
     cpus_allowed: Optional[str] = None
     cpus_allowed_policy: Optional[Literal["shared", "split"]] = None
+    numactl_cpu_nodes: Optional[str] = Field(default=None, max_length=128)
+    numactl_mem_nodes: Optional[str] = Field(default=None, max_length=128)
     numa_cpu_nodes: Optional[str] = None
     numa_mem_policy: Optional[str] = None
     thread: Optional[bool] = None
@@ -177,6 +179,13 @@ class FioParameters(BaseModel):
     def valid_cpu_list(cls, value: Optional[str]):
         if value is not None and not re.fullmatch(r"(?:all|[0-9,-]+)", value):
             raise ValueError("CPU/NUMA 节点列表格式无效，例如 0-3,8")
+        return value
+
+    @field_validator("numactl_cpu_nodes", "numactl_mem_nodes")
+    @classmethod
+    def valid_numactl_node_list(cls, value: Optional[str]):
+        if value is not None and not re.fullmatch(r"(?:all|\d+(?:-\d+)?(?:,\d+(?:-\d+)?)*)", value):
+            raise ValueError("numactl 节点格式无效，例如 0、0-1 或 0,1")
         return value
 
     @field_validator("numa_mem_policy")

@@ -8,7 +8,7 @@ const optionalTextFields = [
   'block_size', 'block_size_range', 'block_size_split', 'io_size', 'offset', 'offset_increment', 'buffer_pattern',
   'rw', 'random_distribution', 'random_generator', 'rate', 'rate_min', 'rate_process',
   'sync_file_range', 'verify', 'verify_pattern', 'cpus_allowed', 'cpus_allowed_policy',
-  'numa_cpu_nodes', 'numa_mem_policy', 'io_submit_mode', 'rw_sequencer', 'steadystate', 'zonemode',
+  'numactl_cpu_nodes', 'numactl_mem_nodes', 'numa_cpu_nodes', 'numa_mem_policy', 'io_submit_mode', 'rw_sequencer', 'steadystate', 'zonemode',
   'zonesize', 'zonerange', 'zoneskip', 'zonecapacity', 'unified_rw_reporting',
 ];
 const optionalNumberFields = [
@@ -127,7 +127,7 @@ function renderCommandArgument(argument) {
 function renderCommandGroups(item) {
   const totalArguments = item.groups.reduce((total, group) => total + group.arguments.length, 0);
   let position = 0;
-  const executable = `<div class="command-line command-executable"><span>fio</span><span class="command-continuation">\\</span></div>`;
+  const executable = `<div class="command-line command-executable"><span>${escapeHtml(item.argv[0] || 'fio')}</span><span class="command-continuation">\\</span></div>`;
   const groups = item.groups.map(group => `<div class="command-group">
     <div class="command-group-label">${escapeHtml(group.label)}</div>
     <div class="command-group-lines">${group.arguments.map(argument => {
