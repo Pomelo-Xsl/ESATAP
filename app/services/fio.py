@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import shlex
 from dataclasses import dataclass
 
 from app.schemas.tasks import DEFAULT_QD_SCAN_DEPTHS, FioParameters
@@ -111,6 +112,17 @@ OPTION_MAP = {
     "log_compression": "log_compression",
 }
 
+COMMAND_GROUPS = [
+    ("任务与目标", {"name", "filename", "size", "io_size", "offset", "offset_increment"}),
+    ("I/O 模式", {"ioengine", "io_submit_mode", "rw", "rw_sequencer", "bs", "bsrange", "bssplit", "direct"}),
+    ("队列与并发", {"iodepth", "iodepth_batch", "iodepth_batch_complete_min", "iodepth_batch_complete_max", "iodepth_low", "numjobs"}),
+    ("运行控制", {"time_based", "runtime", "ramp_time", "startdelay", "loops", "number_ios", "thinktime", "thinktime_spin", "thinktime_blocks"}),
+    ("负载与速率", {"rwmixread", "rwmixcycle", "percentage_random", "random_distribution", "random_generator", "randseed", "randrepeat", "allrandrepeat", "norandommap", "softrandommap", "rate", "rate_min", "rate_iops", "rate_iops_min", "rate_process", "ratecycle", "latency_target", "latency_window", "latency_percentile", "latency_run"}),
+    ("数据、校验与 TRIM", {"invalidate", "refill_buffers", "scramble_buffers", "zero_buffers", "buffer_pattern", "buffer_compress_percentage", "dedupe_percentage", "fsync", "fdatasync", "end_fsync", "sync_file_range", "verify", "do_verify", "verify_fatal", "verify_dump", "verify_pattern", "verify_interval", "trim_percentage", "trim_verify_zero", "trim_backlog", "trim_backlog_batch"}),
+    ("CPU、NUMA 与引擎", {"cpus_allowed", "cpus_allowed_policy", "numa_cpu_nodes", "numa_mem_policy", "thread", "nice", "prioclass", "prio", "hipri", "fixedbufs", "registerfiles", "sqthread_poll", "sqthread_poll_cpu", "cmdprio_percentage", "cmdprio_class", "cmdprio", "serialize_overlap", "atomic", "nowait", "steadystate", "steadystate_duration", "steadystate_ramp_time", "zonemode", "zonesize", "zonerange", "zoneskip", "zonecapacity", "max_open_zones", "job_max_open_zones", "read_beyond_wp"}),
+    ("统计与输出", {"group_reporting", "output-format", "lat_percentiles", "percentile_list", "log_avg_msec", "log_hist_msec", "log_hist_coarseness", "log_max_value", "log_offset", "log_compression", "unified_rw_reporting", "write_iops_log", "write_bw_log", "write_lat_log", "output"}),
+]
+
 
 def is_destructive(test_type: str, parameters: FioParameters) -> bool:
     return (test_type in DESTRUCTIVE_TYPES or parameters.precondition or parameters.rw in DESTRUCTIVE_RW
@@ -130,6 +142,28 @@ def parameters_for_phase(parameters: FioParameters, phase: str) -> FioParameters
     if phase == "precondition":
         return parameters.model_copy(update={"size": "100%", "rw": "write"})
     return parameters
+
+
+def format_command_preview(argv: list[str]) -> dict[str, object]:
+    buckets = {label: [] for label, _ in COMMAND_GROUPS}
+    other: list[str] = []
+    for argument in argv[1:]:
+        option = argument[2:].split("=", 1)[0] if argument.startswith("--") else ""
+        matched = False
+        for label, option_names in COMMAND_GROUPS:
+            if option in option_names:
+                buckets[label].append(shlex.join([argument]))
+                matched = True
+                break
+        if not matched:
+            other.append(shlex.join([argument]))
+    groups = [{"label": label, "arguments": buckets[label]} for label, _ in COMMAND_GROUPS if buckets[label]]
+    if other:
+        groups.append({"label": "其他参数", "arguments": other})
+    ordered_arguments = [argument for group in groups for argument in group["arguments"]]
+    lines = [shlex.join([argv[0]])] + ordered_arguments
+    multiline = " \\\n  ".join(lines)
+    return {"groups": groups, "multiline_command": multiline}
 
 
 @dataclass

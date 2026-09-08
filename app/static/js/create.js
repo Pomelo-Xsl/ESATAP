@@ -118,6 +118,26 @@ function escapeHtml(value) {
   return element.innerHTML;
 }
 
+function renderCommandArgument(argument) {
+  const separator = argument.indexOf('=');
+  if (separator < 0) return `<span class="command-option">${escapeHtml(argument)}</span>`;
+  return `<span class="command-option">${escapeHtml(argument.slice(0, separator))}</span><span class="command-equals">=</span><span class="command-value">${escapeHtml(argument.slice(separator + 1))}</span>`;
+}
+
+function renderCommandGroups(item) {
+  const totalArguments = item.groups.reduce((total, group) => total + group.arguments.length, 0);
+  let position = 0;
+  const executable = `<div class="command-line command-executable"><span>fio</span><span class="command-continuation">\\</span></div>`;
+  const groups = item.groups.map(group => `<div class="command-group">
+    <div class="command-group-label">${escapeHtml(group.label)}</div>
+    <div class="command-group-lines">${group.arguments.map(argument => {
+      position += 1;
+      return `<div class="command-line"><span class="command-indent">&nbsp;&nbsp;</span><span class="command-token">${renderCommandArgument(argument)}</span>${position < totalArguments ? '<span class="command-continuation">\\</span>' : ''}</div>`;
+    }).join('')}</div>
+  </div>`).join('');
+  return executable + groups;
+}
+
 let previewTimer;
 let previewRequest = 0;
 let previewCommandText = '';
@@ -143,7 +163,7 @@ async function refreshCommandPreview() {
     previewCommandText = result.commands.map(item => item.command).join('\n\n');
     preview.innerHTML = result.commands.map((item, index) => `<div class="command-item">
       <div class="command-item-head"><span>${item.phase === 'precondition' ? '全盘写预处理' : item.phase.startsWith('qd_') ? `QD ${item.queue_depth}` : '测试命令'}</span><span>${index + 1} / ${result.commands.length}</span></div>
-      <code>${escapeHtml(item.command)}</code>
+      <div class="command-code">${renderCommandGroups(item)}</div>
     </div>`).join('');
     status.textContent = `${result.commands.length} 条命令`;
     copy.disabled = false;

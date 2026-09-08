@@ -107,6 +107,8 @@ def test_create_page_shows_live_full_command_preview(client):
     assert 'id="copy-command"' in response.text
     assert "/api/tests/preview-command" in create_script
     assert "scheduleCommandPreview" in create_script
+    assert "renderCommandGroups" in create_script
+    assert "command-group-label" in create_script
 
 
 def test_normal_task_api_hides_legacy_queue_depth_scan_values(client):

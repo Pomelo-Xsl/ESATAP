@@ -206,6 +206,10 @@ def test_command_preview_uses_real_builder_and_includes_managed_paths(client):
     assert "--ioengine=libaio" in command and "--iodepth=64" in command
     assert "--rate_iops=50000" in command
     assert "TASK_ID" in command and "--output=" in command and "--write_iops_log=" in command
+    assert command.startswith("fio \\\n  --name=rand_read_4k")
+    assert [group["label"] for group in payload["commands"][0]["groups"]] == [
+        "任务与目标", "I/O 模式", "队列与并发", "运行控制", "负载与速率", "统计与输出",
+    ]
 
 
 def test_qd_command_preview_lists_each_selected_depth(client):
