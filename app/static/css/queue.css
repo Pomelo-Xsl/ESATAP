@@ -74,7 +74,7 @@
   display: grid;
   gap: 16px 18px;
   margin-top: 14px;
-  align-items: end;
+  align-items: start;
 }
 
 .parameter-grid.cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }

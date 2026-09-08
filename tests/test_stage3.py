@@ -131,6 +131,14 @@ def test_warmup_time_is_visible_in_core_parameters(client):
     assert "预热阶段不计入正式性能统计" in page
 
 
+def test_parameter_grid_top_aligns_fields_with_help_text():
+    root = Path(__file__).resolve().parents[1]
+    styles = (root / "app/static/css/queue.css").read_text(encoding="utf-8")
+    parameter_grid = styles.split(".parameter-grid {", 1)[1].split("}", 1)[0]
+    assert "align-items: start;" in parameter_grid
+    assert "align-items: end;" not in parameter_grid
+
+
 def test_normal_task_api_hides_legacy_queue_depth_scan_values(client):
     from app.core.database import SessionLocal
     with SessionLocal() as db:
