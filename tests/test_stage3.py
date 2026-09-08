@@ -7,8 +7,13 @@ from app.models.task import TestTask as TaskModel
 def test_dashboard_renders(client):
     response = client.get("/")
     assert response.status_code == 200
-    assert "企业级 SSD 自动化测试" in response.text
+    assert "Enterprise SSD Automated Testing and Analysis Platform" in response.text
     assert 'href="/docs"' not in response.text
+
+
+def test_dashboard_uses_single_line_english_product_title(client):
+    response = client.get("/")
+    assert '<h1 class="hero-title">Enterprise SSD Automated Testing and Analysis Platform</h1>' in response.text
 
 
 def test_all_user_operations_have_pages(client):
