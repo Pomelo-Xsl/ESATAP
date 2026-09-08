@@ -1,0 +1,5 @@
+{% extends "base.html" %}{% block title %}运行监控 · TestLab{% endblock %}{% block content %}
+<div class="page-head"><div><span class="eyebrow">PROCESS CONTROL</span><h1>运行监控</h1><p>查看由本平台启动并登记的 fio 进程；停止操作只影响对应任务。</p></div><button id="refresh-processes" class="btn btn-accent">刷新状态</button></div>
+<div class="row g-3 mb-4"><div class="col-md-4"><div class="metric-card active"><span>运行中的 fio 进程</span><strong id="process-count">—</strong><small>由平台任务管理器登记</small></div></div><div class="col-md-8"><div class="panel safety-strip"><div class="safety-icon">✓</div><div><h2>精确进程控制</h2><p>页面不会扫描或终止其他 fio 进程，只展示本服务当前管理的任务进程。</p></div></div></div></div>
+<div class="panel"><div class="table-responsive"><table class="table"><thead><tr><th>任务 ID</th><th>PID</th><th>进程状态</th><th>任务详情</th><th>操作</th></tr></thead><tbody id="process-rows"><tr><td colspan="5" class="empty">正在读取...</td></tr></tbody></table></div></div><div id="process-message" class="mt-3"></div>
+{% endblock %}{% block scripts %}<script src="/static/js/processes.js"></script>{% endblock %}

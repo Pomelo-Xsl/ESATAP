@@ -42,6 +42,11 @@ def tasks_page(request: Request):
     return templates.TemplateResponse(request, "tasks.html")
 
 
+@router.get("/processes", response_class=HTMLResponse)
+def processes_page(request: Request):
+    return templates.TemplateResponse(request, "processes.html")
+
+
 def _task_or_404(db: Session, test_id: str) -> TestTask:
     task = db.get(TestTask, test_id)
     if not task or task.deleted:
@@ -64,9 +69,17 @@ def task_analysis(request: Request, test_id: str, db: Session = Depends(get_db))
     return templates.TemplateResponse(request, "analysis.html", {"task": _task_or_404(db, test_id)})
 
 
+@router.get("/tasks/{test_id}/report", response_class=HTMLResponse)
+def task_report_page(request: Request, test_id: str, db: Session = Depends(get_db)):
+    return _render_report(request, _task_or_404(db, test_id))
+
+
 @router.get("/api/tests/{test_id}/report", response_class=HTMLResponse)
 def task_report(request: Request, test_id: str, db: Session = Depends(get_db)):
-    task = _task_or_404(db, test_id)
+    return _render_report(request, _task_or_404(db, test_id))
+
+
+def _render_report(request: Request, task: TestTask):
     before = json.loads(task.smart_before_json) if task.smart_before_json else {}
     after = json.loads(task.smart_after_json) if task.smart_after_json else {}
     response = templates.TemplateResponse(request, "report.html", {"task": task,
@@ -76,5 +89,5 @@ def task_report(request: Request, test_id: str, db: Session = Depends(get_db)):
         "smart_before": before, "smart_after": after, "smart_delta": smart_delta(before, after),
         "environment": environment_info()})
     if request.query_params.get("download") == "1":
-        response.headers["Content-Disposition"] = f'attachment; filename="ssd-report-{test_id}.html"'
+        response.headers["Content-Disposition"] = f'attachment; filename="ssd-report-{task.id}.html"'
     return response

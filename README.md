@@ -9,7 +9,7 @@ Enterprise SSD Automated Testing and Analysis Platform。面向 Ubuntu Server �
 - 后台任务不依赖浏览器连接；同一 SSD 只允许一个运行任务；可精确停止本任务的 fio 进程组。
 - 保存 fio JSON+、IOPS/带宽/时延日志、命令参数、stdout/stderr、SMART 前后快照和周期采样；异常退出仍保留目录。
 - 统一输出 IOPS、十进制 MB/s、μs、原始 byte 容量，并展示 P50—P99.99。
-- 提供仪表盘、设备、创建、实时、历史、详情、分析页面与可下载 HTML 报告；API 文档位于 `/docs`。
+- 提供仪表盘、设备、创建、实时、运行进程、历史、结构化详情、分析页面与可下载 HTML 报告；全部日常操作均可从 Web 界面完成。
 
 ## 目录
 
@@ -56,7 +56,7 @@ bash scripts/run.sh
 .venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
-访问 `http://服务器IP:8000/`，API 文档为 `http://服务器IP:8000/docs`。
+访问 `http://服务器IP:8000/`。设备扫描、SMART、任务创建/启停、运行监控、历史删除、日志、分析和报告均提供前端页面，不需要手工调用 API。
 
 ## 测试
 

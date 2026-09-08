@@ -1,5 +1,5 @@
 {% extends "base.html" %}{% block title %}历史任务 · TestLab{% endblock %}{% block content %}
-<div class="page-head"><div><span class="eyebrow">TEST ARCHIVE</span><h1>测试任务</h1><p>任务记录可删除，原始结果目录默认保留。</p></div><input id="filter" class="form-control search" placeholder="筛选名称、设备或状态"></div>
+<div class="page-head"><div><span class="eyebrow">TEST ARCHIVE</span><h1>测试任务</h1><p>在这里查看、筛选和删除任务记录；删除记录不会删除原始结果文件。</p></div><div class="head-actions"><input id="filter" class="form-control search" placeholder="筛选名称、设备或状态"><button id="refresh-tasks" class="btn btn-outline-light">刷新</button></div></div>
 <div class="panel"><div class="table-responsive"><table class="table"><thead><tr><th>任务</th><th>设备</th><th>类型</th><th>状态</th><th>进度</th><th>耗时</th><th>操作</th></tr></thead><tbody id="task-rows"></tbody></table></div></div>
+<div id="task-message" class="toast-message" role="status"></div>
 {% endblock %}{% block scripts %}<script src="/static/js/tasks.js"></script>{% endblock %}
-

@@ -8,6 +8,15 @@ def test_dashboard_renders(client):
     response = client.get("/")
     assert response.status_code == 200
     assert "企业级 SSD 自动化测试" in response.text
+    assert 'href="/docs"' not in response.text
+
+
+def test_all_user_operations_have_pages(client):
+    for path, marker in [("/devices", "NVMe SSD 设备"), ("/tests/new", "创建测试任务"),
+                         ("/tasks", "测试任务"), ("/processes", "运行监控")]:
+        response = client.get(path)
+        assert response.status_code == 200
+        assert marker in response.text
 
 
 def test_stress_default_is_24_hours():
@@ -40,3 +49,14 @@ def test_report_download_header(client):
     with patch("app.api.pages.environment_info", return_value={"fio":"x","nvme_cli":"x","operating_system":"x","python":"x"}):
         response = client.get(f"/api/tests/{test_id}/report?download=1")
     assert "attachment" in response.headers["content-disposition"]
+
+
+def test_frontend_report_route(client):
+    from app.core.database import SessionLocal
+    with SessionLocal() as db:
+        task = TaskModel(name="frontend-report", device="/dev/nvme2n1", test_type="rand_read_4k", parameters_json="{}")
+        db.add(task); db.commit(); test_id = task.id
+    with patch("app.api.pages.environment_info", return_value={"fio":"x","nvme_cli":"x","operating_system":"x","python":"x"}):
+        response = client.get(f"/tasks/{test_id}/report")
+    assert response.status_code == 200
+    assert "测试报告 V1.0" in response.text

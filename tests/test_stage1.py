@@ -4,7 +4,7 @@ from unittest.mock import patch
 import pytest
 
 from app.schemas.tasks import FioParameters, TestCreate as CreateSchema
-from app.services.device import validate_namespace_path
+from app.services.device import DeviceService, validate_namespace_path
 from app.services.fio import FioCommandBuilder
 from app.services.safety import SafetyService
 from app.services.smart import parse_smart_json
@@ -34,7 +34,28 @@ def test_fio_command_is_argument_list_and_has_defaults(tmp_path):
 
 @pytest.mark.parametrize("bad", ["nvme0n1", "/dev/nvme0", "/dev/nvme0n1p1", "/dev/nvme0n1;rm", "/tmp/disk"])
 def test_illegal_device_path_rejected(bad):
-    with pytest.raises(ValueError): validate_namespace_path(bad)
+    with pytest.raises(ValueError):
+        validate_namespace_path(bad)
+
+
+def test_numa_prefers_sys_block_path(monkeypatch):
+    paths = []
+
+    def fake_read(path, default=""):
+        paths.append(str(path))
+        return "1" if str(path) == "/sys/block/nvme2n1/device/numa_node" else default
+
+    monkeypatch.setattr(DeviceService, "_read", staticmethod(fake_read))
+    assert DeviceService()._read_numa_node("nvme2n1", "nvme2") == "1"
+    assert paths == ["/sys/block/nvme2n1/device/numa_node"]
+
+
+def test_numa_falls_back_to_controller_path(monkeypatch):
+    def fake_read(path, default=""):
+        return "2" if str(path) == "/sys/class/nvme/nvme2/device/numa_node" else default
+
+    monkeypatch.setattr(DeviceService, "_read", staticmethod(fake_read))
+    assert DeviceService()._read_numa_node("nvme2n1", "nvme2") == "2"
 
 
 def test_system_disk_rejected():

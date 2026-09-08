@@ -29,7 +29,6 @@ class DeviceService:
             mounts = [m for m in (item.get("mountpoints") or []) if m]
             for child in children:
                 mounts.extend(m for m in (child.get("mountpoints") or []) if m)
-            sys_block = Path("/sys/class/block") / name
             ctrl_name = Path(controller).name
             devices.append({
                 "name": path, "namespace": path, "controller": controller,
@@ -37,7 +36,7 @@ class DeviceService:
                 "firmware": self._read(Path("/sys/class/nvme") / ctrl_name / "firmware_rev"),
                 "capacity_bytes": int(item.get("size") or 0),
                 "pcie_address": self._read(Path("/sys/class/nvme") / ctrl_name / "address"),
-                "numa_node": self._read(sys_block / "device" / "numa_node", "unknown"),
+                "numa_node": self._read_numa_node(name, ctrl_name),
                 "mounted": bool(mounts), "mountpoints": mounts,
                 "has_partitions": bool(children),
                 "has_filesystem": bool(item.get("fstype") or any(c.get("fstype") for c in children)),
@@ -52,6 +51,24 @@ class DeviceService:
         except OSError:
             return default
 
+    def _read_numa_node(self, namespace: str, controller: str) -> str:
+        """Read NUMA affinity across kernel/sysfs layouts.
+
+        `/sys/block` is the canonical block-device view used by lsblk.  Some
+        kernels expose the attribute only through the controller's PCI device,
+        so keep both class and controller paths as safe read-only fallbacks.
+        """
+        candidates = (
+            Path("/sys/block") / namespace / "device" / "numa_node",
+            Path("/sys/class/block") / namespace / "device" / "numa_node",
+            Path("/sys/class/nvme") / controller / "device" / "numa_node",
+        )
+        for path in candidates:
+            value = self._read(path)
+            if value != "":
+                return value
+        return "unknown"
+
     def _is_system_disk(self, device: str) -> bool:
         proc = self._run(["findmnt", "-n", "-o", "SOURCE", "/"])
         source = proc.stdout.strip()
@@ -64,4 +81,3 @@ class DeviceService:
 def validate_namespace_path(path: str) -> None:
     if not NAMESPACE_RE.fullmatch(path):
         raise ValueError("设备必须是精确的 NVMe Namespace 路径，例如 /dev/nvme2n1")
-
