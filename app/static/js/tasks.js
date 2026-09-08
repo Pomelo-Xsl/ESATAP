@@ -1,6 +1,15 @@
 let rows = [];
 const statusNames = {pending: '等待启动', queued: '排队中', running: '运行中', completed: '已完成', failed: '失败', stopped: '已停止'};
 
+function numaBinding(task) {
+  const parts = [];
+  if (task.numactl_cpu_nodes) parts.push(`CPU ${task.numactl_cpu_nodes}`);
+  if (task.numactl_mem_nodes) parts.push(`MEM ${task.numactl_mem_nodes}`);
+  return parts.length
+    ? `<span class="numa-binding-badge" title="使用 numactl 绑定 NUMA 节点">NUMACTL · ${parts.join(' · ')}</span>`
+    : '';
+}
+
 function showMessage(text, type = 'success') {
   const el = document.querySelector('#task-message');
   el.className = `toast-message show ${type}`;
@@ -21,10 +30,10 @@ function actions(task) {
 
 function render() {
   const query = document.querySelector('#filter').value.toLowerCase();
-  const filtered = rows.filter(task => `${task.name} ${task.device} ${task.status} ${task.test_type}`.toLowerCase().includes(query));
+  const filtered = rows.filter(task => `${task.name} ${task.device} ${task.status} ${task.test_type} ${task.numactl_cpu_nodes || ''} ${task.numactl_mem_nodes || ''}`.toLowerCase().includes(query));
   const body = document.querySelector('#task-rows');
   body.innerHTML = filtered.map(task => `<tr>
-    <td><a href="/tasks/${task.id}">${task.name}</a><small class="task-id">${task.id.slice(0, 8)}</small></td>
+    <td><a href="/tasks/${task.id}">${task.name}</a><small class="task-id">${task.id.slice(0, 8)}</small>${numaBinding(task)}</td>
     <td><code>${task.device}</code></td><td>${task.test_type}</td>
     <td><span class="status status-${task.status}">${statusNames[task.status] || task.status}</span></td>
     <td><div class="progress"><div class="progress-bar" style="width:${task.progress}%"></div></div><small>${task.progress.toFixed(0)}%</small></td>

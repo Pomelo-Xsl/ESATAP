@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import enum
+import json
 import uuid
 from datetime import datetime, timezone
 from typing import Optional
@@ -47,3 +48,18 @@ class TestTask(Base):
     smart_after_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     pid: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     deleted: Mapped[int] = mapped_column(Integer, default=0)
+
+    def _parameter_value(self, name: str) -> Optional[str]:
+        try:
+            value = json.loads(self.parameters_json).get(name)
+        except (TypeError, json.JSONDecodeError):
+            return None
+        return str(value) if value is not None else None
+
+    @property
+    def numactl_cpu_nodes(self) -> Optional[str]:
+        return self._parameter_value("numactl_cpu_nodes")
+
+    @property
+    def numactl_mem_nodes(self) -> Optional[str]:
+        return self._parameter_value("numactl_mem_nodes")

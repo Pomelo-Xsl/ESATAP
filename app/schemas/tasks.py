@@ -274,6 +274,8 @@ class TestRead(BaseModel):
     duration_seconds: Optional[float]
     error_message: Optional[str]
     result_dir: Optional[str]
+    numactl_cpu_nodes: Optional[str] = None
+    numactl_mem_nodes: Optional[str] = None
 
     @field_serializer("created_at", "started_at", "ended_at", when_used="json")
     def serialize_utc_datetime(self, value: Optional[datetime]):

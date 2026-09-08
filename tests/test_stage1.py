@@ -180,7 +180,24 @@ def test_api_create_and_list(client):
     with patch("app.api.tests.SafetyService.validate", return_value=device()):
         created = client.post("/api/tests", json={"name": "read", "device": "/dev/nvme2n1", "test_type": "rand_read_4k"})
     assert created.status_code == 201
-    assert client.get("/api/tests").json()[0]["name"] == "read"
+    listed = client.get("/api/tests").json()[0]
+    assert listed["name"] == "read"
+    assert listed["numactl_cpu_nodes"] is None
+    assert listed["numactl_mem_nodes"] is None
+
+
+def test_task_list_exposes_saved_numactl_bindings(client):
+    with patch("app.api.tests.SafetyService.validate", return_value=device()):
+        created = client.post("/api/tests", json={
+            "name": "numa-bound",
+            "device": "/dev/nvme2n1",
+            "test_type": "rand_read_4k",
+            "parameters": {"numactl_cpu_nodes": "0", "numactl_mem_nodes": "0-1"},
+        })
+    assert created.status_code == 201
+    listed = client.get("/api/tests").json()[0]
+    assert listed["numactl_cpu_nodes"] == "0"
+    assert listed["numactl_mem_nodes"] == "0-1"
 
 
 def test_api_persists_advanced_fio_parameters(client):

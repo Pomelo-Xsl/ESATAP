@@ -138,6 +138,18 @@ def test_queue_stylesheet_url_is_cache_busted(client):
     assert '/static/css/queue.css?v=20260908-1' in response.text
 
 
+def test_task_archive_marks_numactl_bound_tasks(client):
+    response = client.get("/tasks")
+    root = Path(__file__).resolve().parents[1]
+    script = (root / "app/static/js/tasks.js").read_text(encoding="utf-8")
+    styles = (root / "app/static/css/app.css").read_text(encoding="utf-8")
+    assert '/static/js/tasks.js?v=20260908-1' in response.text
+    assert '/static/css/app.css?v=20260908-1' in response.text
+    assert "NUMACTL · ${parts.join(' · ')}" in script
+    assert "numa-binding-badge" in script
+    assert ".numa-binding-badge" in styles
+
+
 def test_warmup_time_is_visible_in_core_parameters(client):
     response = client.get("/tests/new")
     page = response.text
