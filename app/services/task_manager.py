@@ -16,7 +16,7 @@ from sqlalchemy import select
 from app.core.config import settings
 from app.core.database import SessionLocal
 from app.models.task import TaskStatus, TestTask
-from app.schemas.tasks import FioParameters, TestCreate, TestStart
+from app.schemas.tasks import DEFAULT_QD_SCAN_DEPTHS, FioParameters, TestCreate, TestStart
 from app.services.analyzer import parse_fio_file, parse_fio_log
 from app.services.fio import FioCommandBuilder
 from app.services.safety import SafetyService
@@ -82,7 +82,7 @@ class TaskManager:
             before = self._save_smart(result_dir / "smart_before.json", task.device)
             task.smart_before_json = json.dumps(before, ensure_ascii=False) if before else None
             db.commit()
-            qds = params.queue_depths if task.test_type == "qd_scan" else [params.queue_depth]
+            qds = (params.queue_depths or DEFAULT_QD_SCAN_DEPTHS) if task.test_type == "qd_scan" else [params.queue_depth]
             plan = []
             if params.precondition:
                 plan.append(("precondition", "stress_seq_write", params.queue_depth))

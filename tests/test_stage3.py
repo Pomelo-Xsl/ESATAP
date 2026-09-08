@@ -4,6 +4,8 @@ from pathlib import Path
 from unittest.mock import patch
 
 from app.models.task import TestTask as TaskModel
+from app.schemas.tasks import DEFAULT_QD_SCAN_DEPTHS, TestCreate as CreateSchema
+from app.services.parameters import visible_task_parameters
 
 
 def test_dashboard_renders(client):
@@ -38,10 +40,53 @@ def test_all_user_operations_have_pages(client):
 
 
 def test_stress_default_is_24_hours():
-    from app.schemas.tasks import TestCreate
-    value = TestCreate(name="stress", device="/dev/nvme2n1", test_type="stress_rand_write",
-                       destructive_confirmed=True, confirmation_device="/dev/nvme2n1")
+    value = CreateSchema(name="stress", device="/dev/nvme2n1", test_type="stress_rand_write",
+                         destructive_confirmed=True, confirmation_device="/dev/nvme2n1")
     assert value.parameters.runtime_seconds == 86400
+
+
+def test_queue_depth_scan_parameters_only_apply_to_qd_scan():
+    normal = CreateSchema(name="read", device="/dev/nvme2n1", test_type="rand_read_4k",
+                          parameters={"queue_depth": 32, "queue_depths": [1, 2, 4]})
+    scan = CreateSchema(name="scan", device="/dev/nvme2n1", test_type="qd_scan")
+    custom_scan = CreateSchema(name="custom scan", device="/dev/nvme2n1", test_type="qd_scan",
+                               parameters={"queue_depths": [1, 8, 64]})
+
+    assert normal.parameters.queue_depths is None
+    assert scan.parameters.queue_depths == DEFAULT_QD_SCAN_DEPTHS
+    assert custom_scan.parameters.queue_depths == [1, 8, 64]
+
+
+def test_visible_parameters_hide_irrelevant_queue_depth_fields():
+    legacy_payload = '{"queue_depth":32,"queue_depths":[1,2,4],"runtime_seconds":60}'
+
+    normal = visible_task_parameters("rand_read_4k", legacy_payload)
+    scan = visible_task_parameters("qd_scan", legacy_payload)
+
+    assert normal == {"queue_depth": 32, "runtime_seconds": 60}
+    assert scan == {"queue_depths": [1, 2, 4], "runtime_seconds": 60}
+
+
+def test_create_page_only_exposes_scan_sequence_for_qd_scan(client):
+    response = client.get("/tests/new")
+    root = Path(__file__).resolve().parents[1]
+    create_script = (root / "app/static/js/create.js").read_text(encoding="utf-8")
+
+    assert response.status_code == 200
+    assert 'id="qd-scan-options" class="col-12 d-none"' in response.text
+    assert "type.value==='qd_scan'" in create_script
+    assert "payload.parameters.queue_depths" in create_script
+
+
+def test_normal_task_api_hides_legacy_queue_depth_scan_values(client):
+    from app.core.database import SessionLocal
+    with SessionLocal() as db:
+        task = TaskModel(name="legacy", device="/dev/nvme2n1", test_type="rand_read_4k",
+                         parameters_json='{"queue_depth":32,"queue_depths":[1,2,4]}')
+        db.add(task); db.commit(); test_id = task.id
+
+    parameters = client.get(f"/api/tests/{test_id}").json()["parameters"]
+    assert parameters == {"queue_depth": 32}
 
 
 def test_html_report_contains_environment_and_smart(client):

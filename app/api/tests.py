@@ -11,6 +11,7 @@ from app.core.database import get_db
 from app.models.task import TestTask
 from app.schemas.tasks import TestCreate, TestRead, TestStart
 from app.services.safety import SafetyService
+from app.services.parameters import visible_task_parameters
 from app.services.smart import smart_delta
 from app.services.task_manager import task_manager
 
@@ -25,7 +26,7 @@ def create_test(payload: TestCreate, db: Session = Depends(get_db)):
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     task = TestTask(name=payload.name, device=payload.device, test_type=payload.test_type,
-                    parameters_json=payload.parameters.model_dump_json(), device_info_json=json.dumps(device_info, ensure_ascii=False))
+                    parameters_json=payload.parameters.model_dump_json(exclude_none=True), device_info_json=json.dumps(device_info, ensure_ascii=False))
     db.add(task); db.commit(); db.refresh(task)
     return task
 
@@ -41,7 +42,7 @@ def get_test(test_id: str, db: Session = Depends(get_db)):
     if not task or task.deleted:
         raise HTTPException(404, "任务不存在")
     result = TestRead.model_validate(task).model_dump(mode="json")
-    result["parameters"] = json.loads(task.parameters_json)
+    result["parameters"] = visible_task_parameters(task.test_type, task.parameters_json)
     result["result_summary"] = json.loads(task.result_summary_json) if task.result_summary_json else None
     return result
 

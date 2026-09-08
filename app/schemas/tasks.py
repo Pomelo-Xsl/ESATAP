@@ -12,6 +12,7 @@ TEST_TYPES = Literal[
     "seq_read_128k", "seq_write_128k", "rand_read_4k", "rand_write_4k",
     "randrw_70_30", "randrw_50_50", "qd_scan", "stress_rand_write", "stress_seq_write",
 ]
+DEFAULT_QD_SCAN_DEPTHS = [1, 2, 4, 8, 16, 32, 64, 128, 256]
 
 
 class FioParameters(BaseModel):
@@ -21,7 +22,7 @@ class FioParameters(BaseModel):
     runtime_seconds: int = Field(default=60, ge=1, le=604800)
     size: str = "100%"
     precondition: bool = False
-    queue_depths: List[int] = Field(default_factory=lambda: [1, 2, 4, 8, 16, 32, 64, 128, 256])
+    queue_depths: Optional[List[int]] = None
 
     @field_validator("block_size")
     @classmethod
@@ -39,8 +40,8 @@ class FioParameters(BaseModel):
 
     @field_validator("queue_depths")
     @classmethod
-    def valid_qds(cls, value: List[int]):
-        if not value or len(value) > 32 or any(v < 1 or v > 1024 for v in value):
+    def valid_qds(cls, value: Optional[List[int]]):
+        if value is not None and (not value or len(value) > 32 or any(v < 1 or v > 1024 for v in value)):
             raise ValueError("QD 列表必须包含 1-32 个 1..1024 的整数")
         return value
 
@@ -54,9 +55,14 @@ class TestCreate(BaseModel):
     confirmation_device: Optional[str] = None
 
     @model_validator(mode="after")
-    def stress_default_runtime(self):
+    def apply_test_type_defaults(self):
         if self.test_type.startswith("stress_") and "runtime_seconds" not in self.parameters.model_fields_set:
             self.parameters.runtime_seconds = settings.default_stress_seconds
+        if self.test_type == "qd_scan":
+            if self.parameters.queue_depths is None:
+                self.parameters.queue_depths = DEFAULT_QD_SCAN_DEPTHS.copy()
+        else:
+            self.parameters.queue_depths = None
         return self
 
 

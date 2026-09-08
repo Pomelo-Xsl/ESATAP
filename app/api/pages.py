@@ -12,6 +12,7 @@ from app.core.config import BASE_DIR
 from app.core.database import get_db
 from app.models.task import TestTask
 from app.services.environment import environment_info
+from app.services.parameters import visible_task_parameters
 from app.services.smart import smart_delta
 
 
@@ -84,7 +85,7 @@ def _render_report(request: Request, task: TestTask):
     after = json.loads(task.smart_after_json) if task.smart_after_json else {}
     response = templates.TemplateResponse(request, "report.html", {"task": task,
         "device_info": json.loads(task.device_info_json) if task.device_info_json else {},
-        "parameters": json.loads(task.parameters_json), "commands": json.loads(task.fio_command_json) if task.fio_command_json else [],
+        "parameters": visible_task_parameters(task.test_type, task.parameters_json), "commands": json.loads(task.fio_command_json) if task.fio_command_json else [],
         "summary": json.loads(task.result_summary_json) if task.result_summary_json else {},
         "smart_before": before, "smart_after": after, "smart_delta": smart_delta(before, after),
         "environment": environment_info()})
