@@ -154,6 +154,10 @@
   width: 100%;
 }
 
+.toggle-field {
+  min-width: 0;
+}
+
 .option-check {
   display: flex;
   align-items: center;

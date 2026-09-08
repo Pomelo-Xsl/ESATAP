@@ -120,6 +120,14 @@ def test_advanced_checkbox_layout_fills_available_grid_width():
     assert "width: 100%;" in styles
 
 
+def test_all_advanced_checkbox_groups_have_aligned_field_labels(client):
+    response = client.get("/tests/new")
+    page = response.text
+    assert 'class="toggle-grid span-' not in page
+    assert page.count('class="toggle-field') == 7
+    assert page.count('<span class="check-field-label">开关选项</span>') == 7
+
+
 def test_warmup_time_is_visible_in_core_parameters(client):
     response = client.get("/tests/new")
     page = response.text
