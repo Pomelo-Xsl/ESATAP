@@ -100,11 +100,9 @@ function buildParameters(data) {
   return parameters;
 }
 
-form.addEventListener('submit', async event => {
-  event.preventDefault();
-  const data = new FormData(form);
+function buildPayload(data) {
   const destructive = isDestructive();
-  const payload = {
+  return {
     name: data.get('name'),
     device: data.get('device'),
     test_type: data.get('test_type'),
@@ -112,6 +110,75 @@ form.addEventListener('submit', async event => {
     destructive_confirmed: destructive ? document.querySelector('#danger-confirm').checked : false,
     confirmation_device: destructive ? document.querySelector('#confirm-device').value : null,
   };
+}
+
+function escapeHtml(value) {
+  const element = document.createElement('div');
+  element.textContent = value;
+  return element.innerHTML;
+}
+
+let previewTimer;
+let previewRequest = 0;
+let previewCommandText = '';
+
+async function refreshCommandPreview() {
+  const data = new FormData(form);
+  const target = String(data.get('device') || '');
+  const preview = document.querySelector('#command-preview');
+  const status = document.querySelector('#command-preview-status');
+  const copy = document.querySelector('#copy-command');
+  if (!target) {
+    preview.innerHTML = '<div class="command-placeholder">选择目标 Namespace 后将在此显示完整命令。</div>';
+    status.textContent = '请选择目标设备';
+    copy.disabled = true;
+    previewCommandText = '';
+    return;
+  }
+  const requestNumber = ++previewRequest;
+  status.textContent = '正在生成…';
+  try {
+    const result = await api('/api/tests/preview-command', {method: 'POST', body: JSON.stringify(buildPayload(data))});
+    if (requestNumber !== previewRequest) return;
+    previewCommandText = result.commands.map(item => item.command).join('\n\n');
+    preview.innerHTML = result.commands.map((item, index) => `<div class="command-item">
+      <div class="command-item-head"><span>${item.phase === 'precondition' ? '全盘写预处理' : item.phase.startsWith('qd_') ? `QD ${item.queue_depth}` : '测试命令'}</span><span>${index + 1} / ${result.commands.length}</span></div>
+      <code>${escapeHtml(item.command)}</code>
+    </div>`).join('');
+    status.textContent = `${result.commands.length} 条命令`;
+    copy.disabled = false;
+  } catch (error) {
+    if (requestNumber !== previewRequest) return;
+    preview.innerHTML = `<div class="alert alert-danger mb-0">${escapeHtml(error.message)}</div>`;
+    status.textContent = '参数需要修正';
+    copy.disabled = true;
+    previewCommandText = '';
+  }
+}
+
+function scheduleCommandPreview() {
+  clearTimeout(previewTimer);
+  previewTimer = setTimeout(refreshCommandPreview, 250);
+}
+
+form.addEventListener('input', scheduleCommandPreview);
+form.addEventListener('change', scheduleCommandPreview);
+document.querySelector('#copy-command').addEventListener('click', async () => {
+  if (!previewCommandText) return;
+  const button = document.querySelector('#copy-command');
+  try {
+    await navigator.clipboard.writeText(previewCommandText);
+    button.textContent = '已复制';
+    setTimeout(() => { button.textContent = '复制全部命令'; }, 1600);
+  } catch (_error) {
+    button.textContent = '复制失败';
+  }
+});
+
+form.addEventListener('submit', async event => {
+  event.preventDefault();
+  const data = new FormData(form);
+  const payload = buildPayload(data);
   const message = document.querySelector('#form-message');
   try {
     const task = await api('/api/tests', {method: 'POST', body: JSON.stringify(payload)});

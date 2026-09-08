@@ -16,9 +16,9 @@ from sqlalchemy import select
 from app.core.config import settings
 from app.core.database import SessionLocal
 from app.models.task import TaskStatus, TestTask
-from app.schemas.tasks import DEFAULT_QD_SCAN_DEPTHS, FioParameters, TestCreate, TestStart
+from app.schemas.tasks import FioParameters, TestCreate, TestStart
 from app.services.analyzer import parse_fio_file, parse_fio_log
-from app.services.fio import FioCommandBuilder
+from app.services.fio import FioCommandBuilder, build_execution_plan, parameters_for_phase
 from app.services.safety import SafetyService
 from app.services.smart import SmartService
 
@@ -132,11 +132,7 @@ class TaskManager:
             before = self._save_smart(result_dir / "smart_before.json", task.device)
             task.smart_before_json = json.dumps(before, ensure_ascii=False) if before else None
             db.commit()
-            qds = (params.queue_depths or DEFAULT_QD_SCAN_DEPTHS) if task.test_type == "qd_scan" else [params.queue_depth]
-            plan = []
-            if params.precondition:
-                plan.append(("precondition", "stress_seq_write", params.queue_depth))
-            plan.extend((f"qd_{qd}" if len(qds) > 1 else "run", task.test_type, qd) for qd in qds)
+            plan = build_execution_plan(task.test_type, params)
             summaries = []
             commands = []
             started = time.monotonic()
@@ -148,7 +144,7 @@ class TaskManager:
                     run_dir = result_dir / phase
                     run_dir.mkdir(parents=True, exist_ok=True)
                     output = run_dir / "fio.json"
-                    command_params = params.model_copy(update={"size": "100%", "rw": "write"}) if phase == "precondition" else params
+                    command_params = parameters_for_phase(params, phase)
                     command = self.fio.build(task.device, profile, command_params, str(output), str(run_dir / "fio"), qd)
                     commands.append(command)
                     (run_dir / "command.json").write_text(json.dumps(command, ensure_ascii=False, indent=2), encoding="utf-8")

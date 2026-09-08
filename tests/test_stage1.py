@@ -191,3 +191,39 @@ def test_api_rejects_non_whitelisted_fio_parameter(client):
         "parameters": {"filename": "/dev/nvme0n1"},
     })
     assert response.status_code == 422
+
+
+def test_command_preview_uses_real_builder_and_includes_managed_paths(client):
+    response = client.post("/api/tests/preview-command", json={
+        "name": "preview", "device": "/dev/nvme2n1", "test_type": "rand_read_4k",
+        "parameters": {"queue_depth": 64, "io_engine": "libaio", "rate_iops": 50000},
+    })
+    assert response.status_code == 200
+    payload = response.json()
+    assert len(payload["commands"]) == 1
+    command = payload["commands"][0]["command"]
+    assert "--filename=/dev/nvme2n1" in command
+    assert "--ioengine=libaio" in command and "--iodepth=64" in command
+    assert "--rate_iops=50000" in command
+    assert "TASK_ID" in command and "--output=" in command and "--write_iops_log=" in command
+
+
+def test_qd_command_preview_lists_each_selected_depth(client):
+    response = client.post("/api/tests/preview-command", json={
+        "name": "qd preview", "device": "/dev/nvme2n1", "test_type": "qd_scan",
+        "parameters": {"queue_depths": [1, 8, 64]},
+    })
+    commands = response.json()["commands"]
+    assert [item["queue_depth"] for item in commands] == [1, 8, 64]
+    assert [item["phase"] for item in commands] == ["qd_1", "qd_8", "qd_64"]
+
+
+def test_command_preview_includes_destructive_precondition_as_separate_command(client):
+    response = client.post("/api/tests/preview-command", json={
+        "name": "precondition preview", "device": "/dev/nvme2n1", "test_type": "rand_read_4k",
+        "parameters": {"precondition": True, "size": "10GiB", "rw": "randread"},
+    })
+    commands = response.json()["commands"]
+    assert [item["phase"] for item in commands] == ["precondition", "run"]
+    assert "--rw=write" in commands[0]["command"] and "--size=100%" in commands[0]["command"]
+    assert "--rw=randread" in commands[1]["command"] and "--size=10GiB" in commands[1]["command"]

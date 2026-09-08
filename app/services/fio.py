@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from app.schemas.tasks import FioParameters
+from app.schemas.tasks import DEFAULT_QD_SCAN_DEPTHS, FioParameters
 
 
 PROFILES = {
@@ -115,6 +115,21 @@ OPTION_MAP = {
 def is_destructive(test_type: str, parameters: FioParameters) -> bool:
     return (test_type in DESTRUCTIVE_TYPES or parameters.precondition or parameters.rw in DESTRUCTIVE_RW
             or bool(parameters.trim_percentage))
+
+
+def build_execution_plan(test_type: str, parameters: FioParameters) -> list[tuple[str, str, int]]:
+    qds = (parameters.queue_depths or DEFAULT_QD_SCAN_DEPTHS) if test_type == "qd_scan" else [parameters.queue_depth]
+    plan: list[tuple[str, str, int]] = []
+    if parameters.precondition:
+        plan.append(("precondition", "stress_seq_write", parameters.queue_depth))
+    plan.extend((f"qd_{qd}" if len(qds) > 1 else "run", test_type, qd) for qd in qds)
+    return plan
+
+
+def parameters_for_phase(parameters: FioParameters, phase: str) -> FioParameters:
+    if phase == "precondition":
+        return parameters.model_copy(update={"size": "100%", "rw": "write"})
+    return parameters
 
 
 @dataclass

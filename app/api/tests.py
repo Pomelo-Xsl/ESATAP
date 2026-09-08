@@ -1,17 +1,21 @@
 from __future__ import annotations
 
 import json
+import shlex
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.database import get_db
 from app.models.task import TestTask
 from app.schemas.tasks import TestCreate, TestRead, TestStart
-from app.services.safety import SafetyService
+from app.services.device import validate_namespace_path
+from app.services.fio import FioCommandBuilder, build_execution_plan, parameters_for_phase
 from app.services.parameters import visible_task_parameters
+from app.services.safety import SafetyService
 from app.services.smart import smart_delta
 from app.services.task_manager import task_manager
 
@@ -29,6 +33,35 @@ def create_test(payload: TestCreate, db: Session = Depends(get_db)):
                     parameters_json=payload.parameters.model_dump_json(exclude_none=True), device_info_json=json.dumps(device_info, ensure_ascii=False))
     db.add(task); db.commit(); db.refresh(task)
     return task
+
+
+@router.post("/preview-command")
+def preview_command(payload: TestCreate):
+    try:
+        validate_namespace_path(payload.device)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    parameters = payload.parameters
+    builder = FioCommandBuilder()
+    commands = []
+    for phase, profile, queue_depth in build_execution_plan(payload.test_type, parameters):
+        run_dir = settings.results_dir / "TASK_ID" / phase
+        command_parameters = parameters_for_phase(parameters, phase)
+        argv = builder.build(
+            payload.device,
+            profile,
+            command_parameters,
+            str(run_dir / "fio.json"),
+            str(run_dir / "fio"),
+            queue_depth,
+        )
+        commands.append({
+            "phase": phase,
+            "queue_depth": queue_depth,
+            "argv": argv,
+            "command": shlex.join(argv),
+        })
+    return {"commands": commands, "result_path_note": "TASK_ID 会在任务创建后替换为实际任务 ID"}
 
 
 @router.get("", response_model=list[TestRead])

@@ -98,6 +98,17 @@ def test_every_validated_fio_parameter_is_available_in_create_page(client):
     assert set(FioParameters.model_fields) <= input_names
 
 
+def test_create_page_shows_live_full_command_preview(client):
+    response = client.get("/tests/new")
+    root = Path(__file__).resolve().parents[1]
+    create_script = (root / "app/static/js/create.js").read_text(encoding="utf-8")
+    assert "完整 fio 测试命令" in response.text
+    assert 'id="command-preview"' in response.text
+    assert 'id="copy-command"' in response.text
+    assert "/api/tests/preview-command" in create_script
+    assert "scheduleCommandPreview" in create_script
+
+
 def test_normal_task_api_hides_legacy_queue_depth_scan_values(client):
     from app.core.database import SessionLocal
     with SessionLocal() as db:
