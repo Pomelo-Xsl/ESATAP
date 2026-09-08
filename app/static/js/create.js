@@ -1,4 +1,126 @@
-const destructive=new Set(['seq_write_128k','rand_write_4k','randrw_70_30','randrw_50_50','stress_rand_write','stress_seq_write']);const form=document.querySelector('#test-form'),type=document.querySelector('#test-type'),danger=document.querySelector('#danger-box');
-function syncDanger(){const isQdScan=type.value==='qd_scan';danger.classList.toggle('d-none',!(destructive.has(type.value)||form.precondition.checked));document.querySelector('#qd-scan-options').classList.toggle('d-none',!isQdScan);document.querySelector('#queue-depth-field').classList.toggle('d-none',isQdScan);if(type.value.startsWith('stress_')&&form.runtime_seconds.value==='60')form.runtime_seconds.value='86400'}type.onchange=syncDanger;form.precondition.onchange=syncDanger;syncDanger();
-api('/api/devices').then(ds=>{const s=document.querySelector('#device-select');s.innerHTML='<option value="">请选择满足安全条件的 NVMe SSD</option>'+ds.map(d=>{const reasons=(d.ineligible_reasons||[]).join('、');return `<option value="${d.namespace}" ${d.test_eligible?'':'disabled'}>${d.namespace} · ${d.model||'未知型号'}${d.test_eligible?'':`（禁止测试：${reasons}）`}</option>`}).join('')}).catch(e=>document.querySelector('#device-select').innerHTML=`<option>${e.message}</option>`);
-form.onsubmit=async e=>{e.preventDefault();const f=new FormData(form),isDanger=destructive.has(type.value)||form.precondition.checked;const payload={name:f.get('name'),device:f.get('device'),test_type:f.get('test_type'),parameters:{queue_depth:+f.get('queue_depth'),num_jobs:+f.get('num_jobs'),runtime_seconds:+f.get('runtime_seconds'),size:f.get('size'),precondition:form.precondition.checked},destructive_confirmed:isDanger?document.querySelector('#danger-confirm').checked:false,confirmation_device:isDanger?document.querySelector('#confirm-device').value:null};if(type.value==='qd_scan')payload.parameters.queue_depths=String(f.get('queue_depths')).split(',').map(v=>Number(v.trim())).filter(v=>Number.isFinite(v));if(f.get('block_size'))payload.parameters.block_size=f.get('block_size');const msg=document.querySelector('#form-message');try{const task=await api('/api/tests',{method:'POST',body:JSON.stringify(payload)});await api(`/api/tests/${task.id}/start`,{method:'POST',body:JSON.stringify({destructive_confirmed:payload.destructive_confirmed,confirmation_device:payload.confirmation_device})});location.href=`/tasks/${task.id}/live`}catch(err){msg.innerHTML=`<div class="alert alert-danger">${err.message}</div>`}};
+const destructiveProfiles = new Set(['seq_write_128k', 'rand_write_4k', 'randrw_70_30', 'randrw_50_50', 'stress_rand_write', 'stress_seq_write']);
+const destructiveRw = new Set(['write', 'trim', 'randwrite', 'randtrim', 'rw', 'readwrite', 'randrw', 'trimwrite']);
+const form = document.querySelector('#test-form');
+const type = document.querySelector('#test-type');
+const danger = document.querySelector('#danger-box');
+
+const optionalTextFields = [
+  'block_size', 'block_size_range', 'block_size_split', 'io_size', 'offset', 'offset_increment', 'buffer_pattern',
+  'rw', 'random_distribution', 'random_generator', 'rate', 'rate_min', 'rate_process',
+  'sync_file_range', 'verify', 'verify_pattern', 'cpus_allowed', 'cpus_allowed_policy',
+  'numa_cpu_nodes', 'numa_mem_policy', 'io_submit_mode', 'rw_sequencer', 'steadystate', 'zonemode',
+  'zonesize', 'zonerange', 'zoneskip', 'zonecapacity', 'unified_rw_reporting',
+];
+const optionalNumberFields = [
+  'iodepth_batch', 'iodepth_batch_complete_min', 'iodepth_batch_complete_max', 'iodepth_low',
+  'ramp_time_seconds', 'start_delay_seconds', 'loops', 'number_ios', 'buffer_compress_percentage',
+  'dedupe_percentage', 'rwmixread', 'rwmixcycle', 'percentage_random', 'randseed', 'rate_iops',
+  'rate_iops_min', 'rate_cycle_ms', 'thinktime_us', 'thinktime_spin_us', 'thinktime_blocks',
+  'latency_target_us', 'latency_window_us', 'latency_percentile', 'fsync', 'fdatasync',
+  'verify_interval', 'trim_percentage', 'trim_backlog', 'trim_backlog_batch', 'nice', 'prio_class',
+  'prio', 'sqthread_poll_cpu', 'cmdprio_percentage', 'cmdprio_class', 'cmdprio', 'log_hist_msec',
+  'log_hist_coarseness', 'log_compression', 'steadystate_duration_seconds', 'steadystate_ramp_time_seconds',
+  'max_open_zones', 'job_max_open_zones',
+];
+const optionalBooleanFields = [
+  'invalidate', 'refill_buffers', 'scramble_buffers', 'zero_buffers', 'thread', 'serialize_overlap',
+  'randrepeat', 'allrandrepeat', 'norandommap', 'softrandommap', 'latency_run', 'end_fsync',
+  'do_verify', 'verify_fatal', 'verify_dump', 'trim_verify_zero', 'hipri', 'fixedbufs',
+  'registerfiles', 'sqthread_poll', 'atomic', 'nowait', 'read_beyond_wp', 'log_max_value', 'log_offset',
+];
+
+function isDestructive() {
+  const rw = form.elements.rw.value;
+  const trimPercentage = Number(form.elements.trim_percentage.value || 0);
+  return destructiveProfiles.has(type.value) || destructiveRw.has(rw) || form.elements.precondition.checked || trimPercentage > 0;
+}
+
+function syncForm() {
+  const isQdScan = type.value === 'qd_scan';
+  danger.classList.toggle('d-none', !isDestructive());
+  document.querySelector('#qd-scan-options').classList.toggle('d-none', !isQdScan);
+  document.querySelector('#queue-depth-field').classList.toggle('d-none', isQdScan);
+  if (type.value.startsWith('stress_') && form.elements.runtime_seconds.value === '60') {
+    form.elements.runtime_seconds.value = '86400';
+  }
+}
+
+type.addEventListener('change', syncForm);
+form.elements.rw.addEventListener('change', syncForm);
+form.elements.precondition.addEventListener('change', syncForm);
+form.elements.trim_percentage.addEventListener('input', syncForm);
+document.querySelectorAll('.block-mode').forEach(input => input.addEventListener('input', () => {
+  if (!input.value) return;
+  document.querySelectorAll('.block-mode').forEach(other => {
+    if (other !== input) other.value = '';
+  });
+}));
+syncForm();
+
+api('/api/devices').then(devices => {
+  const select = document.querySelector('#device-select');
+  select.innerHTML = '<option value="">请选择满足安全条件的 NVMe SSD</option>' + devices.map(device => {
+    const reasons = (device.ineligible_reasons || []).join('、');
+    const suffix = device.test_eligible ? '' : `（禁止测试：${reasons}）`;
+    return `<option value="${device.namespace}" ${device.test_eligible ? '' : 'disabled'}>${device.namespace} · ${device.model || '未知型号'}${suffix}</option>`;
+  }).join('');
+}).catch(error => {
+  document.querySelector('#device-select').innerHTML = `<option>${error.message}</option>`;
+});
+
+function buildParameters(data) {
+  const parameters = {
+    io_engine: data.get('io_engine'),
+    queue_depth: Number(data.get('queue_depth')),
+    num_jobs: Number(data.get('num_jobs')),
+    runtime_seconds: Number(data.get('runtime_seconds')),
+    size: data.get('size'),
+    direct: data.get('direct') === 'true',
+    time_based: data.get('time_based') === 'true',
+    precondition: form.elements.precondition.checked,
+    group_reporting: data.get('group_reporting') === 'true',
+    latency_percentiles: data.get('latency_percentiles') === 'true',
+    log_avg_msec: Number(data.get('log_avg_msec')),
+    percentile_list: data.get('percentile_list'),
+  };
+  optionalTextFields.forEach(name => {
+    const value = String(data.get(name) || '').trim();
+    if (value) parameters[name] = value;
+  });
+  optionalNumberFields.forEach(name => {
+    const raw = String(data.get(name) || '').trim();
+    if (raw !== '') parameters[name] = Number(raw);
+  });
+  optionalBooleanFields.forEach(name => {
+    if (form.elements[name].checked) parameters[name] = true;
+  });
+  if (type.value === 'qd_scan') {
+    parameters.queue_depths = String(data.get('queue_depths')).split(',').map(value => Number(value.trim())).filter(Number.isFinite);
+  }
+  return parameters;
+}
+
+form.addEventListener('submit', async event => {
+  event.preventDefault();
+  const data = new FormData(form);
+  const destructive = isDestructive();
+  const payload = {
+    name: data.get('name'),
+    device: data.get('device'),
+    test_type: data.get('test_type'),
+    parameters: buildParameters(data),
+    destructive_confirmed: destructive ? document.querySelector('#danger-confirm').checked : false,
+    confirmation_device: destructive ? document.querySelector('#confirm-device').value : null,
+  };
+  const message = document.querySelector('#form-message');
+  try {
+    const task = await api('/api/tests', {method: 'POST', body: JSON.stringify(payload)});
+    await api(`/api/tests/${task.id}/start`, {method: 'POST', body: JSON.stringify({
+      destructive_confirmed: payload.destructive_confirmed,
+      confirmation_device: payload.confirmation_device,
+    })});
+    location.href = `/tasks/${task.id}/live`;
+  } catch (error) {
+    message.innerHTML = `<div class="alert alert-danger">${error.message}</div>`;
+  }
+});

@@ -6,6 +6,7 @@ Enterprise SSD Automated Testing and Analysis Platform。面向 Ubuntu Server �
 
 - 扫描 NVMe Controller/Namespace，展示型号、序列号、固件、容量、PCIe、NUMA、挂载/分区/文件系统及系统盘状态。
 - 提供 128K 顺序读写、4K 随机读写、70/30 与 50/50 混合、QD 1—256 扫描、随机写与顺序写压力测试，以及可选顺序写预处理。
+- 创建页面提供分组式 fio 参数面板，覆盖 NVMe 测试常用的 I/O 引擎、读写模式、块大小/分布、队列批量、范围与偏移、混合比例、随机分布、速率、目标时延、校验、TRIM、CPU/NUMA、io_uring 和日志统计参数；所有字段均由后端白名单校验。
 - 后台任务不依赖浏览器连接；同一 SSD 只运行一个任务，其余任务按创建顺序持久化排队并自动接续；可取消排队或精确停止本任务的 fio 进程组。
 - 保存 fio JSON+、IOPS/带宽/时延日志、命令参数、stdout/stderr、SMART 前后快照和周期采样；异常退出仍保留目录。
 - 统一输出 IOPS、十进制 MB/s、μs、原始 byte 容量，并展示 P50—P99.99。

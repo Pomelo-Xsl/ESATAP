@@ -1,4 +1,22 @@
-const parameterLabels = {block_size: '块大小', queue_depth: '队列深度', num_jobs: '并发任务数', runtime_seconds: '运行时间（秒）', size: '测试容量', precondition: '全盘写预处理', queue_depths: 'QD 扫描序列'};
+const parameterLabels = {
+  block_size: '块大小（bs）', block_size_range: '块大小范围（bsrange）', block_size_split: '块大小分布（bssplit）',
+  queue_depth: '队列深度', queue_depths: 'QD 扫描序列', iodepth_batch: '提交批量',
+  iodepth_batch_complete_min: '最小完成批量', iodepth_batch_complete_max: '最大完成批量', iodepth_low: '队列低水位',
+  num_jobs: '并发任务数', runtime_seconds: '运行时间（秒）', ramp_time_seconds: '预热时间（秒）',
+  start_delay_seconds: '启动延迟（秒）', time_based: '按时间运行', loops: '循环次数', number_ios: 'I/O 次数',
+  size: '测试范围', io_size: '总 I/O 量', offset: '起始偏移', offset_increment: '任务偏移增量',
+  precondition: '全盘写预处理', io_engine: 'I/O 引擎', rw: '读写模式', direct: '直接 I/O',
+  rwmixread: '读取比例', rwmixcycle: '混合切换周期', percentage_random: '随机 I/O 比例',
+  random_distribution: '随机分布', random_generator: '随机数生成器', randseed: '随机种子',
+  rate: '带宽上限', rate_min: '最低带宽', rate_iops: 'IOPS 上限', rate_iops_min: '最低 IOPS',
+  rate_process: '速率过程', rate_cycle_ms: '速率周期', thinktime_us: '思考时间',
+  thinktime_spin_us: '忙等待时间', thinktime_blocks: '思考间隔块数', latency_target_us: '目标时延',
+  latency_window_us: '时延窗口', latency_percentile: '目标百分位', verify: '校验算法',
+  verify_pattern: '校验模式', verify_interval: '校验间隔', cpus_allowed: '允许 CPU',
+  cpus_allowed_policy: 'CPU 分配策略', numa_cpu_nodes: 'NUMA CPU 节点', numa_mem_policy: 'NUMA 内存策略',
+  log_avg_msec: '日志平均窗口', log_hist_msec: '直方图周期', percentile_list: '时延百分位列表',
+  latency_percentiles: '时延百分位', group_reporting: '分组报告', unified_rw_reporting: '统一读写报告',
+};
 const smartLabels = {critical_warning: '严重警告', temperature: '温度（K）', available_spare: '可用备用空间（%）', percentage_used: '寿命消耗（%）', data_units_read: '读取数据单元', data_units_written: '写入数据单元', host_read_commands: '主机读命令', host_write_commands: '主机写命令', controller_busy_time: '控制器忙碌时间', power_cycles: '上电次数', power_on_hours: '通电小时', unsafe_shutdowns: '异常断电', media_errors: '介质错误', error_information_log_entries: '错误日志条目'};
 const destructiveTypes = new Set(['seq_write_128k', 'rand_write_4k', 'randrw_70_30', 'randrw_50_50', 'stress_rand_write', 'stress_seq_write']);
 let requiresDestructive = destructiveTypes.has(TEST_TYPE);

@@ -148,7 +148,7 @@ class TaskManager:
                     run_dir = result_dir / phase
                     run_dir.mkdir(parents=True, exist_ok=True)
                     output = run_dir / "fio.json"
-                    command_params = params.model_copy(update={"size": "100%"}) if phase == "precondition" else params
+                    command_params = params.model_copy(update={"size": "100%", "rw": "write"}) if phase == "precondition" else params
                     command = self.fio.build(task.device, profile, command_params, str(output), str(run_dir / "fio"), qd)
                     commands.append(command)
                     (run_dir / "command.json").write_text(json.dumps(command, ensure_ascii=False, indent=2), encoding="utf-8")

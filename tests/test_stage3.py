@@ -1,4 +1,5 @@
 import json
+import re
 from datetime import datetime
 from pathlib import Path
 from unittest.mock import patch
@@ -28,7 +29,7 @@ def test_device_ui_shows_eligibility_and_disables_unsafe_targets():
     assert 'class="eligibility-row"' in device_script
     assert "device-card-actions" in device_script
     assert "device-block-reason" not in device_script
-    assert "d.test_eligible?'':'disabled'" in create_script
+    assert "device.test_eligible ? '' : 'disabled'" in create_script
 
 
 def test_all_user_operations_have_pages(client):
@@ -73,9 +74,28 @@ def test_create_page_only_exposes_scan_sequence_for_qd_scan(client):
     create_script = (root / "app/static/js/create.js").read_text(encoding="utf-8")
 
     assert response.status_code == 200
-    assert 'id="qd-scan-options" class="col-12 d-none"' in response.text
-    assert "type.value==='qd_scan'" in create_script
-    assert "payload.parameters.queue_depths" in create_script
+    assert 'id="qd-scan-options" class="span-2 d-none"' in response.text
+    assert "type.value === 'qd_scan'" in create_script
+    assert "parameters.queue_depths" in create_script
+
+
+def test_create_page_exposes_grouped_advanced_fio_parameters(client):
+    response = client.get("/tests/new")
+    assert response.status_code == 200
+    for marker in ["fio 高级参数", "I/O 深度、块大小与范围", "混合读写与随机访问",
+                   "速率、思考时间与时延目标", "同步、校验与 TRIM", "CPU、NUMA 与 I/O 优先级",
+                   "io_uring 专用参数", "日志与统计输出"]:
+        assert marker in response.text
+    for field in ["io_engine", "rw", "block_size_split", "random_distribution", "rate_iops",
+                  "latency_target_us", "verify", "cpus_allowed", "sqthread_poll", "percentile_list"]:
+        assert f'name="{field}"' in response.text
+
+
+def test_every_validated_fio_parameter_is_available_in_create_page(client):
+    from app.schemas.tasks import FioParameters
+    response = client.get("/tests/new")
+    input_names = set(re.findall(r'name="([^"]+)"', response.text))
+    assert set(FioParameters.model_fields) <= input_names
 
 
 def test_normal_task_api_hides_legacy_queue_depth_scan_values(client):
