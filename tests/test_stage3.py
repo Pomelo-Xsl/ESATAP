@@ -139,6 +139,15 @@ def test_parameter_grid_top_aligns_fields_with_help_text():
     assert "align-items: end;" not in parameter_grid
 
 
+def test_precondition_control_has_aligned_field_label(client):
+    response = client.get("/tests/new")
+    root = Path(__file__).resolve().parents[1]
+    styles = (root / "app/static/css/queue.css").read_text(encoding="utf-8")
+    assert '<span class="check-field-label">预处理操作</span>' in response.text
+    assert ".check-field-label" in styles
+    assert "flex-direction: column;" in styles
+
+
 def test_normal_task_api_hides_legacy_queue_depth_scan_values(client):
     from app.core.database import SessionLocal
     with SessionLocal() as db:

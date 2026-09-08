@@ -95,9 +95,17 @@
 }
 
 .check-field {
-  min-height: 38px;
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.check-field-label {
+  display: block;
+  min-height: 20px;
+  margin: 0 0 6px;
+  color: #9db1b8;
+  font-size: .82rem;
 }
 
 .check-field .check {
