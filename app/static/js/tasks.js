@@ -1,5 +1,5 @@
 let rows = [];
-const statusNames = {pending: '等待中', running: '运行中', completed: '已完成', failed: '失败', stopped: '已停止'};
+const statusNames = {pending: '等待启动', queued: '排队中', running: '运行中', completed: '已完成', failed: '失败', stopped: '已停止'};
 
 function showMessage(text, type = 'success') {
   const el = document.querySelector('#task-message');
@@ -9,12 +9,12 @@ function showMessage(text, type = 'success') {
 }
 
 function actions(task) {
-  const primary = task.status === 'running'
-    ? `<a class="btn btn-sm btn-accent" href="/tasks/${task.id}/live">实时监控</a>`
+  const primary = ['running', 'queued'].includes(task.status)
+    ? `<a class="btn btn-sm btn-accent" href="/tasks/${task.id}/live">${task.status === 'queued' ? '查看队列' : '实时监控'}</a>`
     : `<a class="btn btn-sm btn-outline-light" href="/tasks/${task.id}">查看详情</a>`;
   const analysis = task.status === 'completed'
     ? `<a class="btn btn-sm btn-outline-light" href="/tasks/${task.id}/analysis">结果分析</a>` : '';
-  const remove = task.status !== 'running'
+  const remove = !['running', 'queued'].includes(task.status)
     ? `<button class="btn btn-sm btn-outline-danger" data-delete="${task.id}" data-name="${task.name}">删除记录</button>` : '';
   return `<div class="table-actions">${primary}${analysis}${remove}</div>`;
 }

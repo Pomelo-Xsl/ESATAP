@@ -48,20 +48,70 @@ class TaskManager:
                                     parameters=params, destructive_confirmed=confirmation.destructive_confirmed,
                                     confirmation_device=confirmation.confirmation_device)
             self.safety.validate(validation)
-            conflict = db.scalar(select(TestTask).where(TestTask.device == task.device, TestTask.status == TaskStatus.running.value))
-            if conflict:
-                raise ValueError("同一 SSD 同一时间只能运行一个测试任务")
-            result_dir = settings.results_dir / task.id
-            result_dir.mkdir(parents=True, exist_ok=False)
-            task.status = TaskStatus.running.value
-            task.progress = 0
-            task.started_at = datetime.now(timezone.utc)
-            task.result_dir = str(result_dir)
-            db.commit(); db.refresh(task)
-            event = threading.Event()
-            self.stop_events[test_id] = event
-            self.pool.submit(self._execute, test_id, event)
+            occupied = db.scalar(select(TestTask).where(
+                TestTask.device == task.device,
+                TestTask.status.in_([TaskStatus.running.value, TaskStatus.queued.value]),
+            ))
+            if occupied:
+                task.status = TaskStatus.queued.value
+                task.progress = 0
+                task.error_message = None
+                db.commit()
+                self._dispatch_next(task.device)
+            else:
+                self._activate_locked(db, task)
+            db.refresh(task)
             return task
+
+    def _activate_locked(self, db, task: TestTask) -> None:
+        result_dir = settings.results_dir / task.id
+        result_dir.mkdir(parents=True, exist_ok=False)
+        task.status = TaskStatus.running.value
+        task.progress = 0
+        task.started_at = datetime.now(timezone.utc)
+        task.ended_at = None
+        task.duration_seconds = None
+        task.error_message = None
+        task.result_dir = str(result_dir)
+        db.commit()
+        event = threading.Event()
+        self.stop_events[task.id] = event
+        self.pool.submit(self._execute, task.id, event)
+
+    def _dispatch_next(self, device: str) -> None:
+        with self.lock, SessionLocal() as db:
+            active = db.scalar(select(TestTask).where(
+                TestTask.device == device,
+                TestTask.status == TaskStatus.running.value,
+            ))
+            if active:
+                return
+            while True:
+                task = db.scalar(select(TestTask).where(
+                    TestTask.device == device,
+                    TestTask.status == TaskStatus.queued.value,
+                    TestTask.deleted == 0,
+                ).order_by(TestTask.created_at.asc(), TestTask.id.asc()))
+                if not task:
+                    return
+                try:
+                    params = FioParameters.model_validate_json(task.parameters_json)
+                    validation = TestCreate(
+                        name=task.name,
+                        device=task.device,
+                        test_type=task.test_type,
+                        parameters=params,
+                        destructive_confirmed=True,
+                        confirmation_device=task.device,
+                    )
+                    self.safety.validate(validation)
+                    self._activate_locked(db, task)
+                    return
+                except Exception as exc:
+                    task.status = TaskStatus.failed.value
+                    task.error_message = f"排队任务启动前安全检查失败：{exc}"
+                    task.ended_at = datetime.now(timezone.utc)
+                    db.commit()
 
     def _save_smart(self, path: Path, device: str) -> dict[str, Any] | None:
         try:
@@ -158,6 +208,7 @@ class TaskManager:
                 with self.lock:
                     self.processes.pop(test_id, None)
                     self.stop_events.pop(test_id, None)
+                self._dispatch_next(task.device)
 
     @staticmethod
     def _collect_logs(result_dir: Path) -> dict[str, list[dict[str, float]]]:
@@ -189,14 +240,33 @@ class TaskManager:
         except ProcessLookupError:
             pass
 
-    def stop(self, test_id: str) -> None:
-        with self.lock:
+    def stop(self, test_id: str) -> str:
+        with self.lock, SessionLocal() as db:
+            task = db.get(TestTask, test_id)
+            if task and task.status == TaskStatus.queued.value:
+                device = task.device
+                task.status = TaskStatus.stopped.value
+                task.error_message = "排队任务已由用户取消"
+                task.ended_at = datetime.now(timezone.utc)
+                db.commit()
+                self._dispatch_next(device)
+                return TaskStatus.stopped.value
             proc = self.processes.get(test_id)
             event = self.stop_events.get(test_id)
             if not proc or not event:
                 raise ValueError("任务未在当前服务进程中运行，拒绝终止未知进程")
             event.set()
             self._terminate(proc)
+            return "stopping"
+
+    def resume_queued(self) -> None:
+        with SessionLocal() as db:
+            devices = list(db.scalars(select(TestTask.device).where(
+                TestTask.status == TaskStatus.queued.value,
+                TestTask.deleted == 0,
+            ).distinct()))
+        for device in devices:
+            self._dispatch_next(device)
 
     def running_processes(self) -> list[dict[str, Any]]:
         with self.lock:

@@ -1,4 +1,5 @@
 const chart = echarts.init(document.querySelector('#live-chart'));
+const statusNames = {pending: '等待启动', queued: '排队中', running: '运行中', completed: '已完成', failed: '失败', stopped: '已停止'};
 chart.setOption({
   backgroundColor: 'transparent',
   tooltip: {trigger: 'axis'},
@@ -40,8 +41,10 @@ async function poll() {
       api(`/api/tests/${TEST_ID}`),
       api(`/api/tests/${TEST_ID}/results`),
     ]);
-    document.querySelector('#status').textContent = task.status;
+    const queueSuffix = task.status === 'queued' && task.queue_position ? `（第 ${task.queue_position} 位）` : '';
+    document.querySelector('#status').textContent = `${statusNames[task.status] || task.status}${queueSuffix}`;
     document.querySelector('#progress').textContent = `${task.progress.toFixed(0)}%`;
+    document.querySelector('#stop').textContent = task.status === 'queued' ? '取消排队' : '停止任务';
     const elapsed = elapsedSeconds(task);
     document.querySelector('#elapsed').textContent = elapsed === null ? '—' : formatElapsed(elapsed);
 
@@ -70,7 +73,8 @@ async function poll() {
 }
 
 document.querySelector('#stop').onclick = async () => {
-  if (confirm('只会终止此任务对应的 fio 进程。确定停止？')) {
+  const queued = document.querySelector('#status').textContent.startsWith('排队中');
+  if (confirm(queued ? '确定取消这个排队任务？' : '只会终止此任务对应的 fio 进程。确定停止？')) {
     await api(`/api/tests/${TEST_ID}/stop`, {method: 'POST'});
   }
 };

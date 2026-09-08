@@ -1,10 +1,13 @@
 import json
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 import pytest
 
-from app.models.task import TaskStatus
+from app.core.database import SessionLocal
+from app.models.task import TaskStatus, TestTask as TaskModel
+from app.schemas.tasks import TestStart as StartSchema
 from app.services.analyzer import parse_fio_json
 from app.services.smart import smart_delta
 from app.services.task_manager import TaskManager
@@ -39,7 +42,99 @@ def test_smart_delta_and_written_bytes():
 
 
 def test_task_status_values():
-    assert {s.value for s in TaskStatus} == {"pending", "running", "completed", "failed", "stopped"}
+    assert {s.value for s in TaskStatus} == {"pending", "queued", "running", "completed", "failed", "stopped"}
+
+
+def test_start_queues_when_same_device_is_running():
+    manager = TaskManager()
+    manager.pool = Mock()
+    now = datetime.now(timezone.utc)
+    with SessionLocal() as db:
+        running = TaskModel(name="running", device="/dev/nvme2n1", test_type="rand_read_4k",
+                           parameters_json="{}", status="running", started_at=now)
+        waiting = TaskModel(name="waiting", device="/dev/nvme2n1", test_type="rand_read_4k",
+                           parameters_json="{}")
+        db.add_all([running, waiting]); db.commit(); waiting_id = waiting.id
+
+    with patch.object(manager.safety, "validate", return_value={}):
+        result = manager.start(waiting_id, StartSchema())
+
+    assert result.status == "queued"
+    manager.pool.submit.assert_not_called()
+
+
+def test_dispatch_starts_oldest_queued_task(tmp_path):
+    manager = TaskManager()
+    manager.pool = Mock()
+    now = datetime.now(timezone.utc)
+    with SessionLocal() as db:
+        first = TaskModel(name="first", device="/dev/nvme2n1", test_type="rand_read_4k",
+                         parameters_json="{}", status="queued", created_at=now)
+        second = TaskModel(name="second", device="/dev/nvme2n1", test_type="rand_read_4k",
+                          parameters_json="{}", status="queued", created_at=now + timedelta(seconds=1))
+        db.add_all([first, second]); db.commit(); first_id, second_id = first.id, second.id
+
+    with patch("app.services.task_manager.settings", SimpleNamespace(results_dir=tmp_path)), \
+         patch.object(manager.safety, "validate", return_value={}):
+        manager._dispatch_next("/dev/nvme2n1")
+
+    with SessionLocal() as db:
+        assert db.get(TaskModel, first_id).status == "running"
+        assert db.get(TaskModel, second_id).status == "queued"
+    manager.pool.submit.assert_called_once()
+
+
+def test_dispatch_skips_queue_item_that_fails_fresh_safety_check(tmp_path):
+    manager = TaskManager()
+    manager.pool = Mock()
+    now = datetime.now(timezone.utc)
+    with SessionLocal() as db:
+        unsafe = TaskModel(name="unsafe", device="/dev/nvme2n1", test_type="rand_read_4k",
+                           parameters_json="{}", status="queued", created_at=now)
+        safe = TaskModel(name="safe", device="/dev/nvme2n1", test_type="rand_read_4k",
+                         parameters_json="{}", status="queued", created_at=now + timedelta(seconds=1))
+        db.add_all([unsafe, safe]); db.commit(); unsafe_id, safe_id = unsafe.id, safe.id
+
+    with patch("app.services.task_manager.settings", SimpleNamespace(results_dir=tmp_path)), \
+         patch.object(manager.safety, "validate", side_effect=[ValueError("设备已挂载"), {}]):
+        manager._dispatch_next("/dev/nvme2n1")
+
+    with SessionLocal() as db:
+        rejected = db.get(TaskModel, unsafe_id)
+        assert rejected.status == "failed"
+        assert "设备已挂载" in rejected.error_message
+        assert db.get(TaskModel, safe_id).status == "running"
+    manager.pool.submit.assert_called_once()
+
+
+def test_stop_cancels_queued_task():
+    manager = TaskManager()
+    manager.pool = Mock()
+    with SessionLocal() as db:
+        task = TaskModel(name="queued", device="/dev/nvme2n1", test_type="rand_read_4k",
+                        parameters_json="{}", status="queued")
+        blocker = TaskModel(name="running", device="/dev/nvme2n1", test_type="rand_read_4k",
+                           parameters_json="{}", status="running")
+        db.add_all([task, blocker]); db.commit(); task_id = task.id
+
+    assert manager.stop(task_id) == "stopped"
+    with SessionLocal() as db:
+        assert db.get(TaskModel, task_id).status == "stopped"
+        assert "取消" in db.get(TaskModel, task_id).error_message
+
+
+def test_queued_task_api_reports_fifo_position(client):
+    now = datetime.now(timezone.utc)
+    with SessionLocal() as db:
+        first = TaskModel(name="first", device="/dev/nvme2n1", test_type="rand_read_4k",
+                         parameters_json="{}", status="queued", created_at=now)
+        second = TaskModel(name="second", device="/dev/nvme2n1", test_type="rand_read_4k",
+                          parameters_json="{}", status="queued", created_at=now + timedelta(seconds=1))
+        db.add_all([first, second]); db.commit(); second_id = second.id
+
+    payload = client.get(f"/api/tests/{second_id}").json()
+    assert payload["status"] == "queued"
+    assert payload["queue_position"] == 2
 
 
 def test_stop_only_registered_process():

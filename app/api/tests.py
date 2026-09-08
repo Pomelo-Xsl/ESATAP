@@ -44,6 +44,14 @@ def get_test(test_id: str, db: Session = Depends(get_db)):
     result = TestRead.model_validate(task).model_dump(mode="json")
     result["parameters"] = visible_task_parameters(task.test_type, task.parameters_json)
     result["result_summary"] = json.loads(task.result_summary_json) if task.result_summary_json else None
+    result["queue_position"] = None
+    if task.status == "queued":
+        queued_ids = list(db.scalars(select(TestTask.id).where(
+            TestTask.device == task.device,
+            TestTask.status == "queued",
+            TestTask.deleted == 0,
+        ).order_by(TestTask.created_at.asc(), TestTask.id.asc())))
+        result["queue_position"] = queued_ids.index(task.id) + 1
     return result
 
 
@@ -58,8 +66,7 @@ def start_test(test_id: str, payload: TestStart = TestStart()):
 @router.post("/{test_id}/stop")
 def stop_test(test_id: str):
     try:
-        task_manager.stop(test_id)
-        return {"status": "stopping"}
+        return {"status": task_manager.stop(test_id)}
     except ValueError as exc:
         raise HTTPException(409, str(exc)) from exc
 
@@ -97,8 +104,8 @@ def delete_history(test_id: str, db: Session = Depends(get_db)):
     task = db.get(TestTask, test_id)
     if not task:
         raise HTTPException(404, "任务不存在")
-    if task.status == "running":
-        raise HTTPException(409, "运行中的任务不能删除")
+    if task.status in {"running", "queued"}:
+        raise HTTPException(409, "运行中或排队中的任务不能删除")
     task.deleted = 1; db.commit()
     return {"deleted": True, "results_preserved": True}
 

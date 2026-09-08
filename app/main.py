@@ -6,12 +6,14 @@ from fastapi.staticfiles import StaticFiles
 from app.api import devices, pages, tests
 from app.core.config import BASE_DIR, settings
 from app.core.database import Base, engine
+from app.services.task_manager import task_manager
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     settings.results_dir.mkdir(parents=True, exist_ok=True)
     Base.metadata.create_all(engine)
+    task_manager.resume_queued()
     yield
 
 

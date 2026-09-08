@@ -17,6 +17,7 @@ def utcnow() -> datetime:
 
 class TaskStatus(str, enum.Enum):
     pending = "pending"
+    queued = "queued"
     running = "running"
     completed = "completed"
     failed = "failed"
