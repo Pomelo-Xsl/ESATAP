@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import FileResponse, Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -102,6 +103,32 @@ def stop_test(test_id: str):
         return {"status": task_manager.stop(test_id)}
     except ValueError as exc:
         raise HTTPException(409, str(exc)) from exc
+
+
+@router.get("/{test_id}/smart-raw/{snapshot}")
+def download_smart_raw(test_id: str, snapshot: str, db: Session = Depends(get_db)):
+    if snapshot not in {"before", "after"}:
+        raise HTTPException(404, "SMART Raw Data 快照不存在")
+    task = db.get(TestTask, test_id)
+    if not task or task.deleted:
+        raise HTTPException(404, "任务不存在")
+    if task.result_dir:
+        raw_file = Path(task.result_dir) / f"smart_{snapshot}.bin"
+        if raw_file.is_file():
+            return FileResponse(raw_file, media_type="application/octet-stream", filename=f"smart_{snapshot}_{test_id}.bin")
+    payload = task.smart_before_json if snapshot == "before" else task.smart_after_json
+    try:
+        raw_hex = json.loads(payload or "{}").get("raw_data", {}).get("hex")
+        raw_bytes = bytes.fromhex(raw_hex) if raw_hex else None
+    except (TypeError, ValueError, json.JSONDecodeError):
+        raw_bytes = None
+    if not raw_bytes:
+        raise HTTPException(404, "该任务没有可下载的 SMART Raw Data")
+    return Response(
+        content=raw_bytes,
+        media_type="application/octet-stream",
+        headers={"Content-Disposition": f'attachment; filename="smart_{snapshot}_{test_id}.bin"'},
+    )
 
 
 @router.get("/{test_id}/results")

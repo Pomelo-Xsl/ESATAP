@@ -1,4 +1,5 @@
 import json
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
@@ -7,7 +8,7 @@ from app.schemas.tasks import FioParameters, TestCreate as CreateSchema
 from app.services.device import DeviceService, validate_namespace_path
 from app.services.fio import OPTION_MAP, FioCommandBuilder, is_destructive
 from app.services.safety import SafetyService
-from app.services.smart import parse_smart_json
+from app.services.smart import SmartService, parse_smart_json, parse_smart_raw
 
 
 def device(**overrides):
@@ -169,6 +170,50 @@ def test_read_profile_with_write_override_requires_confirmation():
 def test_smart_parser():
     parsed = parse_smart_json(json.dumps({"temperature": 308, "percent_used": 3, "media_errors": "2", "data_units_written": 100}))
     assert parsed == {"temperature": 308, "percentage_used": 3, "data_units_written": 100, "media_errors": 2}
+
+
+def test_smart_raw_parser_uses_documented_byte_offsets_and_little_endian():
+    raw = bytearray(512)
+    raw[0] = 0b00000101
+    raw[1:3] = (311).to_bytes(2, "little")
+    raw[3] = 99
+    raw[32:48] = (12345678901234567890).to_bytes(16, "little")
+    raw[200:202] = (315).to_bytes(2, "little")
+    raw[214:216] = (322).to_bytes(2, "little")
+    raw[216:220] = (7).to_bytes(4, "little")
+    raw[232:240] = (987654321).to_bytes(8, "little")
+    raw[240:244] = (456).to_bytes(4, "little")
+
+    parsed = parse_smart_raw(bytes(raw))
+    fields = {field["key"]: field for field in parsed["fields"]}
+    assert parsed["length_bytes"] == 512 and len(parsed["hex"]) == 1024
+    assert fields["critical_warning"]["value"] == 5
+    assert len(fields["critical_warning"]["active_warnings"]) == 2
+    assert fields["composite_temperature"]["value"] == 311
+    assert fields["data_units_read"]["value"] == 12345678901234567890
+    assert fields["temperature_sensor_1"]["value"] == 315
+    assert fields["temperature_sensor_8"]["value"] == 322
+    assert fields["thermal_management_t1_transition_count"]["value"] == 7
+    assert fields["operational_lifetime_energy_consumed"]["value"] == 987654321
+    assert fields["interval_power_measurement"]["value"] == 456
+    assert fields["reserved_244_511"]["byte_field"] == "511:244"
+    assert fields["reserved_244_511"]["value"] is None
+
+
+def test_smart_raw_parser_rejects_short_payload():
+    with pytest.raises(ValueError, match="长度不足"):
+        parse_smart_raw(bytes(511))
+
+
+def test_smart_service_collects_json_and_raw_binary():
+    json_proc = SimpleNamespace(returncode=0, stdout='{"temperature":311,"vendor_field":42}', stderr="")
+    raw_proc = SimpleNamespace(returncode=0, stdout=bytes(512), stderr=b"")
+    with patch("app.services.smart.subprocess.run", side_effect=[json_proc, raw_proc]) as run:
+        result = SmartService().collect("/dev/nvme2n1")
+    assert result["temperature"] == 311
+    assert result["raw_json"]["vendor_field"] == 42
+    assert result["raw_data"]["available"] is True
+    assert run.call_args_list[1].args[0] == ["nvme", "smart-log", "/dev/nvme2n1", "--raw-binary"]
 
 
 def test_api_health(client):

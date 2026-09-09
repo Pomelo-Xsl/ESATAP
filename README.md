@@ -9,7 +9,7 @@ Enterprise SSD Automated Testing and Analysis Platform。面向 Ubuntu Server �
 - 创建页面提供分组式 fio 参数面板，覆盖 NVMe 测试常用的 I/O 引擎、读写模式、块大小/分布、队列批量、范围与偏移、混合比例、随机分布、速率、目标时延、校验、TRIM、CPU/NUMA、io_uring 和日志统计参数；支持通过 numactl 绑定 CPU 与内存 NUMA 节点，所有字段均由后端白名单校验。
 - 创建任务前实时展示由实际命令生成器输出的完整 fio 命令；QD 扫描和预处理会逐条预览，并支持一键复制。
 - 后台任务不依赖浏览器连接；全平台同一时间只运行一个 SSD 测试，其余任务跨设备按创建顺序持久化排队并自动接续，避免并发 I/O 干扰性能结果；可取消排队或精确停止本任务的 fio 进程组。
-- 保存 fio JSON+、IOPS/带宽/时延日志、命令参数、stdout/stderr、SMART 前后快照和周期采样；异常退出仍保留目录。
+- 保存 fio JSON+、IOPS/带宽/时延日志、命令参数、stdout/stderr、SMART 前后快照和周期采样；SMART 同时保留 nvme-cli 完整 JSON、512-byte Raw Binary、十六进制转储及逐字段解析，异常退出仍保留已有目录和数据。
 - 统一输出 IOPS、十进制 MB/s、μs、原始 byte 容量，并展示 P50—P99.99。
 - 提供仪表盘、设备、创建、实时、运行进程、历史、结构化详情、分析页面与可下载 HTML 报告；全部日常操作均可从 Web 界面完成。
 

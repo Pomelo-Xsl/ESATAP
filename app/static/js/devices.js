@@ -44,13 +44,28 @@ async function loadDevices() {
 }
 
 async function showSmart(device) {
-  const output = document.querySelector('#smart-output');
-  output.textContent = '读取中...';
+  const content = document.querySelector('#smart-content');
+  content.innerHTML = '<pre id="smart-output">读取中...</pre>';
   new bootstrap.Modal('#smartModal').show();
   try {
-    output.textContent = JSON.stringify(await api(`/api/devices/${device.replace(/^\//, '')}/smart`), null, 2);
+    const smart = await api(`/api/devices/${device.replace(/^\//, '')}/smart`);
+    const {raw_data: raw, raw_json: rawJson, ...summary} = smart;
+    const rows = (raw?.fields || []).map(field => `<tr>
+      <td><code>${escapeDeviceText(field.byte_field)}</code></td>
+      <td>${escapeDeviceText(field.name)}</td>
+      <td>${field.value === null ? '—' : escapeDeviceText(field.value)}${field.unit ? ` ${escapeDeviceText(field.unit)}` : ''}</td>
+      <td class="raw-hex">${escapeDeviceText(field.hex)}</td>
+      <td>${escapeDeviceText(field.description)}</td>
+    </tr>`).join('');
+    const rawBlock = raw?.available ? `<details class="smart-raw" open><summary>512-byte Raw Data 字段解析</summary>
+      <div class="table-responsive"><table class="table smart-raw-table"><thead><tr><th>Byte</th><th>字段</th><th>解析值</th><th>原始 Hex</th><th>含义</th></tr></thead><tbody>${rows}</tbody></table></div>
+      <details class="smart-raw nested"><summary>完整 512-byte Hex Dump</summary><pre>${escapeDeviceText(raw.hex_dump)}</pre></details>
+    </details>` : `<div class="alert alert-warning">Raw Data 获取失败：${escapeDeviceText(raw?.error || '未知错误')}</div>`;
+    content.innerHTML = `<h6>标准化 SMART 指标</h6><pre id="smart-output">${escapeDeviceText(JSON.stringify(summary, null, 2))}</pre>
+      ${rawBlock}
+      <details class="smart-raw"><summary>nvme-cli 完整原始 JSON</summary><pre>${escapeDeviceText(JSON.stringify(rawJson || {}, null, 2))}</pre></details>`;
   } catch (error) {
-    output.textContent = error.message;
+    content.innerHTML = `<div class="alert alert-danger">${escapeDeviceText(error.message)}</div>`;
   }
 }
 

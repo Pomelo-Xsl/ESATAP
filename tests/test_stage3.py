@@ -144,10 +144,24 @@ def test_task_archive_marks_numactl_bound_tasks(client):
     script = (root / "app/static/js/tasks.js").read_text(encoding="utf-8")
     styles = (root / "app/static/css/app.css").read_text(encoding="utf-8")
     assert '/static/js/tasks.js?v=20260908-1' in response.text
-    assert '/static/css/app.css?v=20260908-1' in response.text
+    assert '/static/css/app.css?v=20260909-1' in response.text
     assert "NUMACTL · ${parts.join(' · ')}" in script
     assert "numa-binding-badge" in script
     assert ".numa-binding-badge" in styles
+
+
+def test_smart_pages_expose_raw_fields_and_binary_download(client):
+    devices_page = client.get("/devices")
+    root = Path(__file__).resolve().parents[1]
+    devices_script = (root / "app/static/js/devices.js").read_text(encoding="utf-8")
+    detail_script = (root / "app/static/js/task-detail.js").read_text(encoding="utf-8")
+    assert '/static/js/devices.js?v=20260909-1' in devices_page.text
+    assert "512-byte Raw Data 字段解析" in devices_script
+    assert "完整 512-byte Hex Dump" in devices_script
+    assert "nvme-cli 完整原始 JSON" in devices_script
+    assert "smart-raw/${key}" in detail_script
+    assert "下载 .bin" in detail_script
+    assert "完整 512-byte Hex Dump" in detail_script
 
 
 def test_warmup_time_is_visible_in_core_parameters(client):
@@ -202,6 +216,35 @@ def test_html_report_contains_environment_and_smart(client):
     assert response.status_code == 200
     assert "ACME Enterprise" in response.text and "SMART 前后对比" in response.text
     assert "fio-3.36" in response.text
+
+
+def test_smart_raw_binary_download_and_report(client):
+    from app.core.database import SessionLocal
+    raw = bytes(range(256)) * 2
+    snapshot = json.dumps({
+        "temperature": 300,
+        "raw_json": {"temperature": 300, "vendor_field": 9},
+        "raw_data": {
+            "available": True,
+            "length_bytes": 512,
+            "hex": raw.hex(),
+            "hex_dump": "0000: 00 01 02 03",
+            "fields": [{"byte_field": "2:1", "name": "Composite Temperature", "value": 300, "unit": "K", "hex": "2c 01", "description": "当前综合温度"}],
+        },
+    })
+    with SessionLocal() as db:
+        task = TaskModel(name="raw-smart", device="/dev/nvme2n1", test_type="rand_read_4k",
+                         parameters_json="{}", status="completed",
+                         smart_before_json=snapshot, smart_after_json=snapshot)
+        db.add(task); db.commit(); test_id = task.id
+    download = client.get(f"/api/tests/{test_id}/smart-raw/before")
+    assert download.status_code == 200 and download.content == raw
+    assert "attachment" in download.headers["content-disposition"]
+    with patch("app.api.pages.environment_info", return_value={"fio":"x","nvme_cli":"x","operating_system":"x","python":"x"}):
+        report = client.get(f"/api/tests/{test_id}/report")
+    assert "SMART 512-byte Raw Data" in report.text
+    assert "Composite Temperature" in report.text
+    assert "vendor_field" in report.text
 
 
 def test_report_download_header(client):

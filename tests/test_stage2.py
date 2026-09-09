@@ -41,6 +41,18 @@ def test_smart_delta_and_written_bytes():
     assert delta["temperature"] == 5 and delta["written_bytes_approx"] == 1_024_000
 
 
+def test_smart_snapshot_saves_raw_binary_file(tmp_path):
+    manager = TaskManager()
+    manager.smart.collect = Mock(return_value={
+        "temperature": 311,
+        "raw_data": {"available": True, "hex": bytes(range(256)).hex() * 2},
+    })
+    snapshot = tmp_path / "smart_before.json"
+    manager._save_smart(snapshot, "/dev/nvme2n1")
+    assert snapshot.exists()
+    assert snapshot.with_suffix(".bin").read_bytes() == bytes(range(256)) * 2
+
+
 def test_task_status_values():
     assert {s.value for s in TaskStatus} == {"pending", "queued", "running", "completed", "failed", "stopped"}
 

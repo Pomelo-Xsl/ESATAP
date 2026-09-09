@@ -116,6 +116,9 @@ class TaskManager:
         try:
             value = self.smart.collect(device)
             path.write_text(json.dumps(value, ensure_ascii=False, indent=2), encoding="utf-8")
+            raw_hex = value.get("raw_data", {}).get("hex")
+            if raw_hex:
+                path.with_suffix(".bin").write_bytes(bytes.fromhex(raw_hex))
             return value
         except Exception as exc:
             path.with_suffix(".error.log").write_text(str(exc), encoding="utf-8")

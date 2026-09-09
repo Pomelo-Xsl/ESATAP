@@ -42,8 +42,19 @@ function renderPerformance(summary) {
 
 function renderSmart(result) {
   const before = result.smart_before || {}, after = result.smart_after || {}, delta = result.smart_delta || {};
-  const keys = [...new Set([...Object.keys(before), ...Object.keys(after)])];
+  const keys = [...new Set([...Object.keys(before), ...Object.keys(after)])].filter(key => !['raw_data', 'raw_json'].includes(key));
   document.querySelector('#smart-table').innerHTML = keys.length ? `<table class="table"><thead><tr><th>指标</th><th>测试前</th><th>测试后</th><th>变化量</th></tr></thead><tbody>${keys.map(key => `<tr><td>${smartLabels[key] || key}</td><td>${displayValue(before[key])}</td><td>${displayValue(after[key])}</td><td class="delta">${displayValue(delta[key])}</td></tr>`).join('')}</tbody></table>` : '<div class="empty">尚无 SMART 前后快照</div>';
+  const snapshots = [['测试前', 'before', before], ['测试后', 'after', after]];
+  document.querySelector('#smart-raw-snapshots').innerHTML = snapshots.map(([label, key, snapshot]) => {
+    const raw = snapshot.raw_data;
+    if (!raw) return '';
+    if (!raw.available) return `<div class="alert alert-warning mb-2">${label} Raw Data 获取失败：${escapeHtml(raw.error || '未知错误')}</div>`;
+    const fieldRows = (raw.fields || []).map(field => `<tr><td><code>${escapeHtml(field.byte_field)}</code></td><td>${escapeHtml(field.name)}</td><td>${field.value === null ? '—' : escapeHtml(field.value)}${field.unit ? ` ${escapeHtml(field.unit)}` : ''}</td><td class="raw-hex">${escapeHtml(field.hex)}</td><td>${escapeHtml(field.description)}</td></tr>`).join('');
+    return `<details class="smart-raw"><summary>${label} · 512-byte Raw Data <a href="/api/tests/${TEST_ID}/smart-raw/${key}" download onclick="event.stopPropagation()">下载 .bin</a></summary>
+      <div class="table-responsive"><table class="table smart-raw-table"><thead><tr><th>Byte</th><th>字段</th><th>解析值</th><th>原始 Hex</th><th>含义</th></tr></thead><tbody>${fieldRows}</tbody></table></div>
+      <details class="smart-raw nested"><summary>完整 512-byte Hex Dump</summary><pre>${escapeHtml(raw.hex_dump)}</pre></details>
+    </details>`;
+  }).join('');
 }
 
 function escapeHtml(text) {
